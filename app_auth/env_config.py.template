@@ -1,0 +1,44 @@
+# Tank Environment
+TANK_BASE_URL = ''
+TANK_FE_BASE_URL = ''
+TANK_DOC_BASE_URL = ''
+TANK_AWS_REGION = ''
+
+TANK_API_GATEWAY_ARN = ''
+TANK_ROLE_ARN = ''
+
+
+# DynamoDB
+DYNAMODB_ENTITY_TABLE = ''
+DYNAMODB_BLUEPRINT_TABLE = ''
+DYNAMODB_RINGDATA_TABLE = ''
+DYNAMODB_REL_TABLE = ''
+
+# Use a secure, unique and absolutely secret key for
+# signing the data.
+CSRF_SESSION_KEY = ''
+
+# Secret key for signing cookies
+SECRET_KEY = ''
+
+
+# flask_cognito
+COGNITO_REGION = ''
+COGNITO_USERPOOL_ID = ''
+COGNITO_APP_CLIENT_ID = ''
+COGNITO_CHECK_TOKEN_EXPIRATION = True  # Optional, default is True
+
+
+#UI
+PREVIEW_LAYER = 2
+
+
+#-----------
+
+S3_BUCKET_NAME = ''
+
+#---------
+
+#OPEN AI
+OPENAI_API_KEY=''
+
