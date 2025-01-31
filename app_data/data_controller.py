@@ -2,7 +2,7 @@
 from flask import request,current_app, jsonify
 import urllib.parse
 from flask import flash,url_for,session
-from env_config import URL_SCHEME,PREVIEW_LAYER
+from env_config import PREVIEW_LAYER
 from datetime import datetime
 import uuid
 import re

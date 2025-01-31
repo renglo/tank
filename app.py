@@ -14,7 +14,6 @@ from flask_cors import CORS
 from app_blueprint.blueprint_routes import app_blueprint
 from app_data.data_routes import app_data
 from app_auth.auth_routes import app_auth
-from app_acct.acct_routes import app_acct
 from app_docs.docs_routes import app_docs
 from app_schd.schd_routes import app_schd
 from flask_cognito import CognitoAuth, cognito_auth_required
