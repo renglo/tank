@@ -70,7 +70,6 @@ app.register_blueprint(app_data)
 app.register_blueprint(app_blueprint)
 app.register_blueprint(app_auth)
 app.register_blueprint(app_docs)
-app.register_blueprint(app_acct)
 app.register_blueprint(app_schd)
 
 

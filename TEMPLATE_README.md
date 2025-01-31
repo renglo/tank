@@ -41,6 +41,20 @@ If there are conflicts you'll have to resolve them.
 To avoid conflicts avoid overwriting template files.
 
 
+#### STEP 4b: Commit template changes to your project repository
+
+`git add . `
+`git commit -m 'some message'`
+`git push -u -origin`
+
+If there is a conflict indicating that the origin branch has been rebased, use the following command and try again
+
+`git config pull.rebase true`
+
+
+Your code will be untouched as template files will be overriden by your changes.
+
+
 
 #### Step 5: Setup the configuration file around the current environment.
 
@@ -74,7 +88,14 @@ Install all packages indicated in requirements.txt
 `pip install -r requirements.txt`
 
 
-#### Step 7: 
+#### Step 7: Correcting issues in the Template files
+
+- While it is easier to just fix the problem in your local clone, you should fix the Template in the original template repository. 
+- That way, everybody will benefit from your fixes. 
+- However, it ok to fix something locally to test it works and then change the template (double work). Git will merge both changes as one.
+- Your local copy will never send changes to the Template. 
+
+
 
 
 
