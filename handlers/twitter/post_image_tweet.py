@@ -3,6 +3,7 @@ import json
 from env_config import TANK_DOC_BASE_URL
 import requests  # Added for the new post_image method
 import io  # Added to create a file-like object
+import os
 
 
 class PostImageTweet:
@@ -20,8 +21,15 @@ class PostImageTweet:
              
         try:
             
+            
+            # Determine if Flask is running on AWS Lambda or locally
+            if os.getenv('AWS_LAMBDA_FUNCTION_NAME'):
+                img_base_url = TANK_DOC_BASE_URL
+            else:
+                img_base_url = '127.0.0.1:5000'
+            
             # Download the image from the URL
-            response_1 = requests.get(f'{TANK_DOC_BASE_URL}/{imageurl}')
+            response_1 = requests.get(f'{img_base_url}/{imageurl}')
             image_data = response_1.content  # Store the image binary data
             
             # Upload the image using the API object
