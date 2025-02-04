@@ -89,7 +89,7 @@ class DocsModel:
                 file_extension = filename.split('.')[-1].lower()  # Get the file extension
                 content_type = content_type_mapping.get(file_extension, 'application/octet-stream')  # Default to application/octet-stream if not found
             
-            current_app.logger.error(f"Content Type: {content_type}")
+            current_app.logger.info(f"Content Type: {content_type}")
             content = document['Body'].read()  # Read the content as binary
             
             # Create a response object
