@@ -168,6 +168,42 @@ class DataModel:
             return {"error": str(e)}   
         
         
+    def get_a_b_index(self, portfolio, prefix_path, lastkey=None):
+        # Construct the partition key and sort key prefix
+        portfolio_index = f'irn:data:{portfolio}'  # This will be used as the partition key (PK)
+        path_index = f'{prefix_path}'
+        
+        try:
+            # Build the query parameters with KeyConditionExpression
+            query_params = {
+                'TableName': DYNAMODB_RINGDATA_TABLE,  # Make sure this references the correct DynamoDB table
+                'IndexName': 'path_index',  # Specify the name of your secondary index
+                'KeyConditionExpression': Key('portfolio_index').eq(portfolio_index) & Key('path_index').begins_with(path_index),  # Include both keys
+            }
+
+            # Add the ExclusiveStartKey to the query parameters if provided (for pagination)
+            if lastkey:
+                query_params['ExclusiveStartKey'] = lastkey  # Ensure lastkey has both PK and SK components
+
+            # Query DynamoDB to get items with matching PK and SK prefix
+            response = self.data_table.query(**query_params)
+            
+            # Extract items and pagination key
+            items = response.get('Items', [])
+            endkey = response.get('LastEvaluatedKey')  # Pagination key for next query
+
+            # Build the result
+            result = {
+                'items': items,
+                'lastkey': endkey  # This will be passed as 'lastkey' in the next call if needed
+            }
+
+            return result
+
+        except (BotoCoreError, ClientError) as e:
+            return {"error": str(e)}   
+        
+        
 
 
     #TANk-FE * 
@@ -267,3 +303,86 @@ class DataModel:
             return {'message':'Item deleted', 'response':str(response)}
         except ClientError as e:
             return {'error': str(e)}
+        
+        
+    
+    #INDEX QUERIES
+    
+    def get_a_b_beginswith(self,query):
+        
+        '''
+        Incoming object instance  
+            {
+            'portfolio':<portfolio_id>,
+            'org':<org_id>,
+            'ring':<ring_id>,
+            'operator':'begins_with',
+            'value':<value>,
+            'filter':{
+                   'operator':<greater_than|less_than>,
+                   'field':<field_to_filter_on>,
+                   'value':<value_filter_uses_on_the_field>
+                },
+            'limit':<page_limit>,
+            'lastkey':<page_lastkey>,
+            'sort': <asc|desc>
+            }
+        '''
+        
+        
+        portfolio_index = f'irn:data:{query["portfolio"]}'  # This will be used as the partition key (PK)
+        path_index_head = f'irn:h_index:{query["org"]}:{query["ring"]}'
+        if 'value' not in query or not query['value']:
+            path_index_tail = ''
+        else:
+            path_index_tail = f':{query["value"]}'
+        path_index = path_index_head + path_index_tail
+        
+        
+        try:
+            # Build the query parameters with KeyConditionExpression
+            query_params = {
+                'TableName': DYNAMODB_RINGDATA_TABLE,  # Make sure this references the correct DynamoDB table
+                'IndexName': 'path_index',  # Specify the name of your secondary index
+                'KeyConditionExpression': Key('portfolio_index').eq(portfolio_index) & Key('path_index').begins_with(path_index),  # Include both keys
+                'Limit': query['limit'],
+                "ScanIndexForward": False if query['sort'] == 'asc' else True
+            }
+
+            # Add the ExclusiveStartKey to the query parameters if provided (for pagination)
+            if query['lastkey']:
+                query_params['ExclusiveStartKey'] = query['lastkey'] 
+
+            # Query DynamoDB to get items with matching PK and SK prefix
+            response = self.data_table.query(**query_params)
+            
+            # Extract items and pagination key
+            items = response.get('Items', [])
+            endkey = response.get('LastEvaluatedKey')  # Pagination key for next query
+
+            # Build the result
+            result = {
+                'items': items,
+                'lastkey': endkey  # This will be passed as 'lastkey' in the next call if needed
+            }
+
+            return result
+
+        except (BotoCoreError, ClientError) as e:
+            return {"error": str(e)}   
+    
+    
+    def get_a_b_greaterthan(self,portfolio_index,path_index):
+        
+        return {'message': 'This feature is not implemented yet'}
+    
+    def get_a_b_lessthan(self,portfolio_index,path_index):
+        
+        return {'message': 'This feature is not implemented yet'}
+    
+    def get_a_b_equalto(self,portfolio_index,path_index):
+        
+        return {'message': 'This feature is not implemented yet'}
+    
+    
+    

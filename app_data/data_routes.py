@@ -72,8 +72,8 @@ def route_a_b_get(portfolio, org, ring):
     else:
         response = DAC.get_a_b(portfolio, org, ring, limit, lastkey, sort)
         return jsonify(response), 200  # Ensure a consistent JSON response
-
-
+    
+    
 
 #TANK-FE *
 @app_data.route('/<string:portfolio>/<string:org>/<string:ring>', methods=['POST'])
@@ -83,6 +83,62 @@ def route_a_b_post(portfolio,org,ring):
     response, status = DAC.post_a_b(portfolio,org,ring,payload)
     DAC.refresh_s3_cache(portfolio, org, ring, None)
     return response, status
+
+
+#TANK-FE *
+@app_data.route('/<string:portfolio>/<string:org>/<string:ring>/_query', methods=['GET'])
+def route_a_b_query(portfolio, org, ring):
+    
+    limit = request.args.get('limit', default=987, type=int)  # Retrieve limit, default to 1000
+    lastkey = request.args.get('lastkey')  # Retrieve lastkey, default to None
+    sort = request.args.get('sort')  # Retrieve sort, default to None
+    payload = request.get_json()
+    
+    '''
+    Payload sample 1
+    The value is any string at the end of the index string portfolio:org:ring:<any_string>
+    {
+        'operator':'begins_with',
+        'value':'123453:active',
+        'filter':{
+            'operator':'greater_than',
+            'field':'launch_time'
+            'value':'17234432453'
+        },
+        'sort':'desc'
+    }
+    
+    Payload sample 2
+    This is a special case where the index is a timestamp  portfolio:org:ring:<timestamp> 
+    In the background it is a 'begins_with' with an empty sufix
+    Value is always empty. 
+    Returns a list of items ordered chronologically. 
+    The filter is optional but recommended to shorten the response size
+    {
+        'operator':'chrono',
+        'filter':{
+            'operator':'greater_than',
+            'value':'17234432453'
+        },
+        'sort':'desc'
+    }
+    '''
+       
+    query = {
+        'portfolio':portfolio,
+        'org':org,
+        'ring':ring,
+        'operator':payload.get('operator', None),
+        'value':payload.get('value', None),
+        'filter':payload.get('filter',{}),
+        'limit':limit,
+        'lastkey':lastkey,
+        'sort': payload.get('sort', sort)
+    }
+       
+    response = DAC.get_a_b_query(query)
+    return response, 200
+
 
 
 #TANK-FE *
@@ -109,5 +165,8 @@ def route_a_b_c_delete(portfolio,org,ring,idx):
     response, status = DAC.delete_a_b_c(portfolio,org,ring,idx)
     DAC.refresh_s3_cache(portfolio, org, ring, None)
     return response, status
+
+
+
 
     

@@ -158,7 +158,7 @@ class DataController:
         return index_string
     
    
-    def generate_index_string(self,blueprint,item_values):
+    def generate_index_string(self,blueprint,org,item_values):
         # Check if blueprint has an "indexes" key
         indexes = blueprint.get('indexes')
         if indexes is None:
@@ -178,8 +178,8 @@ class DataController:
                 return False
 
         # Start building the index string with the constant prefix
-        index_string = "irn:h_index:"
-        
+        index_string = "irn:h_index:"   
+        index_string += f"{org}:"  
         index_string += f"{blueprint.get('name')}:"
 
         # Iterate through the path list and construct the index string
@@ -307,7 +307,7 @@ class DataController:
         item['attributes'] = item_values  
         
         
-        index_string = self.generate_index_string(blueprint, item_values)    
+        index_string = self.generate_index_string(blueprint,org,item_values)    
         if index_string:
             item['path_index'] = index_string
         elif 'path_index' in item:
@@ -424,7 +424,7 @@ class DataController:
 
         return updated_item
     
-    
+    #DEPRECATED
     def get_a_index(self,portfolio,prefix_path):
         
         items = []
@@ -476,13 +476,125 @@ class DataController:
             self.sort = sort
             items = sorted(items, key=self.sort_item_list, reverse=sort_reverse)
         '''
-        current_app.logger.debug('NUMBER OF ITEMS 2:'+str(i))
+        current_app.logger.debug('NUMBER OF ITEMS:'+str(i))
+
+        #return items,result['lastkey']
+        return items
+    
+    
+    #DEPRECATED
+    def get_a_b_index(self,portfolio,prefix_path):
+        
+        items = []
+        
+        result = self.DAM.get_a_b_index(portfolio,prefix_path)
+        current_app.logger.debug('get_a_b_index results:' + json.dumps(result))  # Convert result to string
+        
+        if 'error' in result:
+            current_app.logger.error(result['error'])
+            
+            result['success'] = False
+            result['message'] = 'Items could not be retrieved'
+            result['error'] = result['error']
+            status = 400
+            return result
+
+        i=0
+        for row in result['items']:
+
+            i += 1
+            '''
+            i += 1
+            if lastkey and i==1:
+                #If lastkey was sent, ignore first item 
+                #as it was the last item in the last page
+                continue
+            '''
+
+            item = {}
+            item = row['attributes']
+            item['_id'] = row['_id']
+
+            if 'modified' in row:
+                item['_modified'] = row['modified']
+            else:
+                item['_modified'] = ''
+                
+            if 'path_index' in row:
+                item['_index'] = row['path_index']
+            else:
+                item['_index'] = ''
+
+            if item:
+                items.append(item)
+
+        '''       
+        if len(items)>1 and sort:
+
+            self.sort = sort
+            items = sorted(items, key=self.sort_item_list, reverse=sort_reverse)
+        '''
+        current_app.logger.debug('NUMBER OF ITEMS:'+str(i))
 
         #return items,result['lastkey']
         return items
         
         
-
+    def get_a_b_query(self,query):
+        
+        '''
+        Incoming object 
+            {
+            'portfolio':<portfolio_id>,
+            'org':<org_id>,
+            'ring':<ring_id>,
+            'operator':<begins_with|chrono|greater_than|less_than|equal_to>,
+            'value':<value>,
+            'filter':{
+                   'operator':<greater_than|less_than>,
+                   'field':<field_to_filter_on>,
+                   'value':<value_filter_uses_on_the_field>
+                },
+            'limit':<page_limit>,
+            'lastkey':<page_lastkey>,
+            'sort': <asc|desc>
+            }
+        '''
+        
+        
+        #prefix = f'irn:h_index:{org}:{ring}:{index_tail}'
+        
+        if 'operator' not in query or not query['operator']:
+            return {'success':False}
+            
+        operator = query['operator']
+        #portfolio_index = f'irn:data:{query["portfolio"]}'
+           
+        # SWITCH            
+        if operator=='begins_with':
+            
+            result = self.DAM.get_a_b_beginswith(query)
+            
+        if operator=='chrono':
+            
+            result = self.DAM.get_a_b_beginswith(query)
+        
+        if operator=='greater_than':
+            
+            result = self.DAM.get_a_b_greaterthan(query)
+        
+        if operator=='less_than':
+            
+            result = self.DAM.get_a_b_lessthan(query)
+        
+        if operator=='equal_to':
+            
+            result = self.DAM.get_a_b_equalto(query)
+            
+        
+        return result
+        
+        
 
 
     #TANK-FE *
