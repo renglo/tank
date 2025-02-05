@@ -565,7 +565,7 @@ class DataController:
         #prefix = f'irn:h_index:{org}:{ring}:{index_tail}'
         
         if 'operator' not in query or not query['operator']:
-            return {'success':False}
+            return {'success':False,'message':'No query'}
             
         operator = query['operator']
         #portfolio_index = f'irn:data:{query["portfolio"]}'
@@ -573,24 +573,73 @@ class DataController:
         # SWITCH            
         if operator=='begins_with':
             
-            result = self.DAM.get_a_b_beginswith(query)
+            response = self.DAM.get_a_b_beginswith(query)
             
         if operator=='chrono':
             
-            result = self.DAM.get_a_b_beginswith(query)
+            response = self.DAM.get_a_b_beginswith(query)
         
         if operator=='greater_than':
             
-            result = self.DAM.get_a_b_greaterthan(query)
+            response = self.DAM.get_a_b_greaterthan(query)
         
         if operator=='less_than':
             
-            result = self.DAM.get_a_b_lessthan(query)
+            response = self.DAM.get_a_b_lessthan(query)
         
         if operator=='equal_to':
             
-            result = self.DAM.get_a_b_equalto(query)
+            response = self.DAM.get_a_b_equalto(query)
             
+            
+        items = []
+        #response = self.DAM.get_a_b(portfolio,org,ring,limit=limit,lastkey=lastkey)
+        result = {}
+        if 'error' in response:
+            current_app.logger.error(response['error'])
+            
+            result['success'] = False
+            result['message'] = 'Items could not be retrieved'
+            result['error'] = response['error']
+            status = 400
+            return result
+
+        i=0
+        for row in response['items']:
+
+            i += 1
+               
+            if query['lastkey'] and i==1:
+                #If lastkey was sent, ignore first item 
+                #as it was the last item in the last page
+                continue
+            
+            item = {}
+            item = row['attributes']
+            item['_id'] = row['_id']
+
+            if 'modified' in row:
+                item['_modified'] = row['modified']
+            else:
+                item['_modified'] = ''
+                
+            if 'path_index' in row:
+                item['_index'] = row['path_index']
+            else:
+                item['_index'] = ''
+
+            if item:
+                items.append(item)
+                
+        
+        last_id = response['lastkey']
+                       
+        
+        result['success'] = True
+        result['items'] = items
+        result['last_id'] = last_id
+        
+        current_app.logger.debug('NUMBER OF ITEMS (QUERY):'+str(i))
         
         return result
         

@@ -131,7 +131,7 @@ class DataModel:
 
         
         
-        
+    #Deprecated
     def get_a_index(self, portfolio, prefix_path, lastkey=None):
         # Construct the partition key and sort key prefix
         portfolio_index = f'irn:data:{portfolio}'  # This will be used as the partition key (PK)
@@ -167,7 +167,7 @@ class DataModel:
         except (BotoCoreError, ClientError) as e:
             return {"error": str(e)}   
         
-        
+    #Deprecated
     def get_a_b_index(self, portfolio, prefix_path, lastkey=None):
         # Construct the partition key and sort key prefix
         portfolio_index = f'irn:data:{portfolio}'  # This will be used as the partition key (PK)
@@ -222,9 +222,9 @@ class DataModel:
             if item:
                 return item
             else:
-                return {"error": "Document not found"}, 404
+                return {"error": "Document not found"}
         except ClientError as e:
-            return {"error": e.response['Error']['Message']}, 500
+            return {"error": e.response['Error']['Message']}
         
         
     

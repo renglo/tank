@@ -86,10 +86,10 @@ def route_a_b_post(portfolio,org,ring):
 
 
 #TANK-FE *
-@app_data.route('/<string:portfolio>/<string:org>/<string:ring>/_query', methods=['GET'])
+@app_data.route('/<string:portfolio>/<string:org>/<string:ring>/_query', methods=['POST'])
 def route_a_b_query(portfolio, org, ring):
     
-    limit = request.args.get('limit', default=987, type=int)  # Retrieve limit, default to 1000
+    limit = request.args.get('limit', default=999, type=int)  # Retrieve limit, default to 1000
     lastkey = request.args.get('lastkey')  # Retrieve lastkey, default to None
     sort = request.args.get('sort')  # Retrieve sort, default to None
     payload = request.get_json()
