@@ -3,6 +3,7 @@ from flask import Flask, request, redirect, session, url_for,Blueprint, jsonify,
 
 import boto3
 import copy
+import json
 from datetime import datetime
 from common import *
 import uuid
@@ -12,13 +13,50 @@ from flask_cognito import cognito_auth_required, current_user, current_cognito_j
 import re
 import time
 from validate_email import validate_email
-from env_config import SECRET_KEY
+from env_config import SECRET_KEY,TANK_BASE_URL,WL_NAME
 
 
 class AuthController:
 
     def __init__(self,tid=False,ip=False):
         self.AUM = AuthModel()
+        
+        
+    def refresh_tree(self):
+    
+        # Generate tree
+        current_app.logger.error(f"Refreshing tree")
+        data = {}
+        data['user_id'] = self.get_current_user()
+        response = self.get_tree_full(**data)
+
+        # Initialize S3 client and define bucket name and file path
+        s3_client = boto3.client('s3')  # Ensure boto3 is imported
+        bucket_name = current_app.config['S3_BUCKET_NAME']  
+        file_path = f'auth/tree/{data["user_id"]}'
+
+        # Store the new version in S3
+        try:
+            s3_client.put_object(Bucket=bucket_name, Key=file_path, Body=json.dumps(response['document']))
+        except Exception as e:
+            current_app.logger.error(f"Failed to upload to S3: {str(e)}")
+            return jsonify({"success": False, "message": "Failed to upload to S3", "status": 500}), 500
+        
+        return response
+        
+        
+        
+    
+    def get_current_user(self):
+
+        if "cognito:username" in current_cognito_jwt:
+            # IdToken was used
+            user_id = create_md5_hash(current_cognito_jwt["cognito:username"],9)
+        else:
+            # AccessToken was used
+            user_id = create_md5_hash(current_cognito_jwt["username"],9)
+
+        return user_id
 
 
     #TANK-FE
@@ -45,8 +83,9 @@ class AuthController:
         #1b. Check if the recipient email is already part of the team
         
 
-        # 2. Check if the recipient email already exists in the user pool
+        #2. Check if the recipient email already exists in the user pool
         response_1 = self.get_user_id(email)
+        current_app.logger.debug('User exists in pool?:'+str(response_1))
         
         if response_1['success']:
 
@@ -58,15 +97,18 @@ class AuthController:
                 )
             
             if check:       
+                current_app.logger.debug('User already belongs to the portfolio:'+str(check))
                 # If yes, the user will be automatically added to the team without sending an invite
                 response = self.add_user_to_team_funnel(user_id=user_id,team_id=team_id)
                 if response['success']:
+                    current_app.logger.debug('User added to the team:'+str(response))
                     return{
                         "success":True, 
                         "message": "User has been added to the team.", 
                         "status" : 200
                         }
                 else:
+                    current_app.logger.debug('User could not be added to the team:'+str(response))
                     return{
                         "success":False, 
                         "message": "User could not be added to the team.", 
@@ -129,6 +171,8 @@ class AuthController:
     def get_user_id(self,email):
         # DO NOT EXPOSE THIS FUNCTION TO API
         response = self.AUM.check_user_by_email(email)
+        current_app.logger.debug('Calling Identity Pool:'+str(response)) 
+        
         if response['success']:
             user_id = create_md5_hash(response['document']['cognito_user_id'],9)
             response['document']['user_id'] = user_id
@@ -406,8 +450,7 @@ class AuthController:
 
                     org_id = org['_id']
                     
-                    current_app.logger.debug('FLAG4>>TEAM:'+team_id+'PORTFOLIO:'+portfolio_id+'TOOL:'+tool_id+'ORG:'+org_id) 
-                        
+                   
                     # Assemble the orgs object
                     if 'orgs' not in tree['portfolios'][portfolio_id]:
                         tree['portfolios'][portfolio_id]['orgs'] = {}
@@ -1167,6 +1210,7 @@ class AuthController:
 
 
         #1. Create Porfolio Document
+        #Input: kwargs['name'] and kwargs['about'] 
         response_1 = self.create_entity('portfolio',**kwargs)
         
         current_app.logger.debug('Step 1: Creating Porfolio Document')
@@ -1546,7 +1590,7 @@ class AuthController:
         result = {}
         transaction = []
 
-        current_app.logger.debug('Initiating CREATE TEAM FUNNEL')
+        current_app.logger.debug('Initiating ADD USER TO TEAM FUNNEL')
 
         #0. Check for requirements
         required_keys = ['user_id','team_id'] 
@@ -1705,19 +1749,19 @@ class AuthController:
         response_4 = self.AUM.send_email(
             sender="human@helloirma.com",
             recipient=kwargs['email'],
-            subject='You have been invited to team '+ bridge['teamdoc']['name'] +' ('+bridge['portfoliodoc']['name']+')',
+            subject='You have been invited to team '+bridge['portfoliodoc']['name']+'/'+ bridge['teamdoc']['name'],
             body_text=
-                'You have been invited by '+ bridge['senderdoc']['name']+' '+bridge['senderdoc']['slot_a']+' to team '+ bridge['teamdoc']['name'] +' ('+bridge['portfoliodoc']['name']+
-                '). Your invite code is: '+
+                'You have been invited by '+ bridge['senderdoc']['name']+' '+bridge['senderdoc']['slot_a']+' to team '+ bridge['portfoliodoc']['name']+'/'+ bridge['teamdoc']['name'] +
+                '. Your invite code is: '+
                 rel_data['hash']+
-                '. Follow this link: https://tank7075.helloirma.com/invite?code='+
+                '. Follow this link: '+TANK_BASE_URL+'/invite?code='+
                 rel_data['hash']+' .' ,
             body_html='<html><body>'+
-                        '<h1>Hello from Irma</h1>'+
-                        '<h2>You have been invited by '+ bridge['senderdoc']['name']+' '+bridge['senderdoc']['slot_a']+' to team '+ bridge['teamdoc']['name'] +' ('+bridge['portfoliodoc']['name']+').</h2>'+
+                        '<h1>Hello from '+WL_NAME+'</h1>'+
+                        '<h2>You have been invited by '+ bridge['senderdoc']['name']+' '+bridge['senderdoc']['slot_a']+' to team '+ bridge['portfoliodoc']['name']+'/'+ bridge['teamdoc']['name'] +
                         '<div>Your invite code is: '+rel_data['hash']+'</div>'+
                         '<div>Follow this link:</div>'+
-                        '<div>https://tank7075.helloirma.com/invite?code='+rel_data['hash']+'&email='+kwargs['email']+'</div>' 
+                        '<div>'+TANK_BASE_URL+'/invite?code='+rel_data['hash']+'&email='+kwargs['email']+'</div>' 
                       '</body></html>'
         )
         response_4['message'] = 'Sent invite to team '+kwargs['team_id']+' via email to '+kwargs['email'] 
@@ -2095,9 +2139,6 @@ class AuthController:
                 return response_4a                 
             else:
                 transaction.append(response_4a)
-
-
-
 
 
         #All went good, Summarize Transaction Success 

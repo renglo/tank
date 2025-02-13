@@ -38,6 +38,7 @@ def t1():
 
 #TANK-FE *
 @app_data.route('/<string:portfolio>/<string:org>/<string:ring>', methods=['GET'])
+@cognito_auth_required
 def route_a_b_get(portfolio, org, ring):
 
     limit = request.args.get('limit', default=987, type=int)  # Retrieve limit, default to 1000
@@ -77,6 +78,7 @@ def route_a_b_get(portfolio, org, ring):
 
 #TANK-FE *
 @app_data.route('/<string:portfolio>/<string:org>/<string:ring>', methods=['POST'])
+@cognito_auth_required
 def route_a_b_post(portfolio,org,ring):
     
     payload = request.get_json()
@@ -87,6 +89,7 @@ def route_a_b_post(portfolio,org,ring):
 
 #TANK-FE *
 @app_data.route('/<string:portfolio>/<string:org>/<string:ring>/_query', methods=['POST'])
+@cognito_auth_required
 def route_a_b_query(portfolio, org, ring):
     
     limit = request.args.get('limit', default=999, type=int)  # Retrieve limit, default to 1000
@@ -143,6 +146,7 @@ def route_a_b_query(portfolio, org, ring):
 
 #TANK-FE *
 @app_data.route('/<string:portfolio>/<string:org>/<string:ring>/<string:idx>', methods=['GET'])
+@cognito_auth_required
 def route_a_b_c_get(portfolio,org,ring,idx):
 
     return DAC.get_a_b_c(portfolio,org,ring,idx)
@@ -150,6 +154,7 @@ def route_a_b_c_get(portfolio,org,ring,idx):
     
 #TANK-FE *
 @app_data.route('/<string:portfolio>/<string:org>/<string:ring>/<string:idx>', methods=['PUT'])
+@cognito_auth_required
 def route_a_b_c_put(portfolio,org,ring,idx):
     
     payload = request.get_json()
@@ -160,6 +165,7 @@ def route_a_b_c_put(portfolio,org,ring,idx):
 
 #TANK-FE *
 @app_data.route('/<string:portfolio>/<string:org>/<string:ring>/<string:idx>', methods=['DELETE'])
+@cognito_auth_required
 def route_a_b_c_delete(portfolio,org,ring,idx):
 
     response, status = DAC.delete_a_b_c(portfolio,org,ring,idx)

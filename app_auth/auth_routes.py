@@ -18,7 +18,7 @@ AUC = AuthController()
 JWKS_URL = f'https://cognito-idp.{COGNITO_REGION}.amazonaws.com/{COGNITO_USERPOOL_ID}/.well-known/jwks.json'
 
 
-#TANK-FE
+# WILL DEPRECATE : Use the get_current_user() in auth_controller instead
 def get_current_user():
 
     if "cognito:username" in current_cognito_jwt:
@@ -496,7 +496,7 @@ def create_org(portfolio_id):
         return jsonify({"success": False, "message": "Invalid JSON", "status": 400}), 400
 
     # Validate required keys in the payload
-    required_keys = ['name', 'about']
+    required_keys = ['name']
     if not all(key in data for key in required_keys):
         return jsonify({"success": False, "message": "Missing required attributes", "status": 400}), 400
 
@@ -527,7 +527,7 @@ def put_org(portfolio_id, org_id):
     if payload is None:
         return jsonify({"success": False, "message": "Invalid JSON", "status": 400}), 400
 
-    response_1 = validate_payload(payload, ['name', 'about'])
+    response_1 = validate_payload(payload, ['name'])
     if not response_1['success']:
         return jsonify(response_1), response_1['status']
     
@@ -623,7 +623,7 @@ def put_team(portfolio_id, team_id):
     if payload is None:
         return jsonify({"success": False, "message": "Invalid JSON", "status": 400}), 400
 
-    response_1 = validate_payload(payload, ['name', 'about'])
+    response_1 = validate_payload(payload, ['name'])
     if not response_1['success']:
         return jsonify(response_1), response_1['status']
     

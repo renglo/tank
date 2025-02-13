@@ -67,14 +67,13 @@ class AuthModel:
         except self.cognito_client.exceptions.UserNotFoundException:
             return {
                 "success":False, 
-                "message": "User not found",
+                "message": "User not found (UserNotFoundException)",
                 "status" : 404
             }
         except Exception as e:
             return {
                 "success":False, 
                 "message": e.response['Error']['Message'],
-                "document": data,
                 "status" : e.response['ResponseMetadata']['HTTPStatusCode']
             }
         
@@ -290,6 +289,9 @@ class AuthModel:
                 }
  
         except ClientError as e:
+            '''
+            example e: 'Email address is not verified. The following identities failed the check in region US-EAST-1: user@email.com'
+            '''
             return {
                 "success":False, 
                 "message": e.response['Error']['Message'],

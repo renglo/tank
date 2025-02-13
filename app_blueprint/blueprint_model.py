@@ -40,6 +40,9 @@ class BlueprintModel:
                     ScanIndexForward=False # Show latest blueprint versions first
                 )
                 items = response.get('Items', [])
+                
+                if len(items)==0:
+                    return {"message": "Document not found"}
                 item = items[0]
                 current_app.logger.info('items from DB:'+str(items))
                        
@@ -50,9 +53,9 @@ class BlueprintModel:
             if item:
                 return item
             else:
-                return {"message": "Document not found"}, 404
+                return {"message": "Document not found"}
         except ClientError as e:
-            return {"error": e.response['Error']['Message']}, 500
+            return {"error": e.response['Error']['Message']}
         
 
     def update_blueprint(self,data):

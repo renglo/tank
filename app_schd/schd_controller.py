@@ -2,6 +2,7 @@ from flask import current_app
 
 from app_data.data_controller import DataController
 from app_docs.docs_controller import DocsController
+from app_blueprint.blueprint_controller import BlueprintController
 
 from app_schd.schd_loader import SchdLoader
 from app_schd.schd_model import SchdModel
@@ -15,8 +16,9 @@ class SchdController:
     def __init__(self):
 
         self.DAC = DataController()
-        self.SHM = SchdModel()
         self.DCC = DocsController()
+        self.BPC = BlueprintController()
+        self.SHM = SchdModel()
         self.SHL = SchdLoader()
         
 
@@ -37,7 +39,7 @@ class SchdController:
         return result
         
    
-    # COMPLETE BUT UNTESTED   
+    # COMPLETE  
     def create_job_run(self,portfolio,org,payload):
         # Import here instead of at top level
         
@@ -164,3 +166,43 @@ class SchdController:
         
         return result, 200
         
+        
+    
+    def direct_run(self,tool,handler,payload):
+           
+        result = []
+
+        action = 'direct_run'
+             
+        response = {'success':False,'output':[]}
+        
+        # A way to limit the calls to this endpoint is to make each one of these runs have the same name as a blueprint. 
+        # And before every run, we could fetch the blueprint. It if doesn't exist we abort the call. 
+        # It makes sense that there is a blueprint for every RPC as it shows the inputs of the call. 
+        # We could store every call to the RPC as a document. The ring itself is the name of the blueprint. 
+        
+        blueprint = self.BPC.get_blueprint('irma',handler,'last')
+        
+        if 'fields' not in blueprint:
+            result.append({'success':False,'action':action,'handler':'','message':'No valid handler'}) 
+            return result, 400
+            
+        else:
+            handler_name = tool + '/' + handler
+            handler_class = self.convert_module_name_to_class(handler_name)
+            handler_input_data = payload
+
+            response = self.SHL.load_and_run(handler_name, handler_class, payload = handler_input_data)
+            
+            current_app.logger.debug(f'Handler output:{response}')
+            
+            
+            if not response['success']:
+                result.append({'success':False,'action':action,'handler':handler_name,'input':handler_input_data,'output':response})
+                return result, 400
+            
+            result.append({'success':True,'action':action,'handler':handler_name,'input':handler_input_data,'output':response})
+          
+
+   
+        return result, 200
