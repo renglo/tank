@@ -26,10 +26,18 @@ class PostImageTweet:
             if os.getenv('AWS_LAMBDA_FUNCTION_NAME'):
                 img_base_url = TANK_DOC_BASE_URL
             else:
-                img_base_url = '127.0.0.1:5000'
+                img_base_url = 'http://127.0.0.1:5000'
             
             # Download the image from the URL
+            print(f'Requesting image to upload to X:{img_base_url}/{imageurl}')
             response_1 = requests.get(f'{img_base_url}/{imageurl}')
+            if response_1.status_code != 200:
+                print(f'Failed to download image, status code: {response_1.status_code}')
+                return {'success': False, 'action': action, 'message': 'Image download failed', 'output': response_1.status_code}
+            else:
+                print('Image download ok')
+            
+            
             image_data = response_1.content  # Store the image binary data
             
             # Upload the image using the API object
@@ -92,8 +100,16 @@ class PostImageTweet:
         tweet = payload['caption']  
         media = self.bridge['media']    
                
-        try:          
-            response = client.create_tweet(text=tweet, media_ids=[media['media_id']])
+        try: 
+            
+            if 'reply_to' not in payload:         
+                response = client.create_tweet(text=tweet, media_ids=[media['media_id']])
+            else:    
+                response = client.create_tweet(
+                    text=tweet, 
+                    media_ids=[media['media_id']],
+                    in_reply_to_tweet_id=payload['reply_to']  # Added conversation_id for replies
+                )
             # Parsing the response
             
             output = {}

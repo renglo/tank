@@ -3,8 +3,6 @@ import requests
 import os
 import json
 
-from env_config import X_BEARER_TOKEN
-
 
 class GetTweetReplies:
     
@@ -48,7 +46,7 @@ class GetTweetReplies:
         results = []
            
 
-        # Step 1: Verify that the game is still going
+        # Step 1: 
         response_1 = self.connect_to_endpoint(payload)
         results.append(response_1)
         if not response_1['success']: return {'success':False,'action':action,'message':'Could not obtain replies','output':results}
@@ -63,3 +61,36 @@ if __name__ == "__main__":
     #TEST STAND-ALONE RUN
     GTR = GetTweetReplies()
     
+
+
+
+'''
+RESPONSE SAMPLE
+
+{
+  "data": [
+    {
+      "id": "1234567890123456789",
+      "text": "This is the content of the tweet.",
+      "created_at": "2025-02-11T10:15:30.000Z",
+      "author_id": "9876543210987654321",
+      "conversation_id": "1234567890123456789",
+      "lang": "en"
+    },
+    {
+      "id": "1234567890123456790",
+      "text": "Another example tweet content.",
+      "created_at": "2025-02-11T11:00:00.000Z",
+      "author_id": "9876543210987654322",
+      "conversation_id": "1234567890123456789",
+      "lang": "en"
+    }
+  ],
+  "meta": {
+    "newest_id": "1234567890123456790",
+    "oldest_id": "1234567890123456789",
+    "result_count": 2,
+    "next_token": "b26v89c19zqg8o3fpdvk7g2gh4szz2"
+  }
+}
+'''
