@@ -56,14 +56,19 @@ def get_rule(portfolio,org,idx):
 @app_schd.route('/<string:portfolio>/<string:org>/schd_rules',methods=['POST'])
 @cognito_auth_required
 def create_rule(portfolio,org):   
-    current_app.logger.info('Running Create Rule')
+    action = "create_rule"
+    current_app.logger.info('Creating new Rule')
     
-    result = SHM.create_https_target_event(
-        rule_name='cronrule_'+str(random.randint(1000, 9999)),
-        schedule_expression='rate(1 minute)'
-    )
+    payload = request.get_json() 
+    payload['portfolio'] = portfolio
+    payload['org'] = org
+    
+    rule_name = 'cronrule_'+str(random.randint(1000, 9999))
+    schedule_expression = 'rate(1 minute)'
+
+    response = SHC.create_rule(rule_name,schedule_expression,payload)
       
-    return jsonify(result)
+    return {'success':True,'action':action,'input':payload,'output':response}
 
 
 #NOT IMPLEMENTED

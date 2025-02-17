@@ -543,7 +543,7 @@ class DataController:
     def get_a_b_query(self,query):
         
         '''
-        Incoming object 
+        Incoming query object must have the following shape
             {
             'portfolio':<portfolio_id>,
             'org':<org_id>,
@@ -570,23 +570,28 @@ class DataController:
         operator = query['operator']
         #portfolio_index = f'irn:data:{query["portfolio"]}'
            
-        # SWITCH            
+        # SWITCH   
+        # The index begins with ...         
         if operator=='begins_with':
             
             response = self.DAM.get_a_b_beginswith(query)
             
+        # The index is a timestamp, return results in chronological order
         if operator=='chrono':
             
             response = self.DAM.get_a_b_beginswith(query)
         
+        # The index is numeric, return anything greater than ...
         if operator=='greater_than':
             
             response = self.DAM.get_a_b_greaterthan(query)
         
+        # The index is numeric, return anything less than ...
         if operator=='less_than':
             
             response = self.DAM.get_a_b_lessthan(query)
         
+        # The index is equal to ...
         if operator=='equal_to':
             
             response = self.DAM.get_a_b_equalto(query)

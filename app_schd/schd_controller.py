@@ -37,11 +37,58 @@ class SchdController:
         result = capitalized_words.replace(' ', '')
         
         return result
+    
+    
+    def find_rule(self,portfolio,org,timer):
         
+        rule_name = "cronjob_"+portfolio+"_"+org+"_"+timer        
+        result = self.SHM.find_rule(rule_name)
+        
+        return result
+        
+    
+    def create_rule(self,portfolio,org,timer,schedule_expression,handler):
+        '''
+        Function used to create the cronjob
+        '''
+        
+        rule_name = "cronjob_"+portfolio+"_"+org+"_"+timer 
+        
+        payload = {
+            'portfolio':portfolio,
+            'org':org,
+            'handler':handler
+        }
+        
+        result = self.SHM.create_https_target_event(
+            rule_name=rule_name,
+            schedule_expression=schedule_expression,
+            payload=payload
+        )
+        
+        '''
+        result = SHM.create_https_target_event(
+            rule_name='cronrule_'+str(random.randint(1000, 9999)),
+            schedule_expression='rate(1 minute)',
+            payload=payload
+        )'''
+        
+        return result
+        
+        
+    def verify_rule(self,portfolio,org,timer):
+        
+        rule_name = "cronjob_"+portfolio+"_"+org+"_"+timer        
+        result = self.SHM.verify_rule(rule_name)
+        
+        return result
+    
    
     # COMPLETE  
     def create_job_run(self,portfolio,org,payload):
-        # Import here instead of at top level
+        '''
+        Function that is called by the cronjob 
+        '''
         
         result = []
         action = 'create_job_run'
