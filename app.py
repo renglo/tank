@@ -1,6 +1,6 @@
 # Import flask and template operators
 from flask import request,Flask,current_app, session, redirect
-import default_config
+from default_config import *
 import logging
 import time
 import os
@@ -21,7 +21,7 @@ from flask_cognito import cognito_auth_required, current_user, current_cognito_j
 
 
 
-from env_config import  TANK_BASE_URL, TANK_FE_BASE_URL,TANK_API_GATEWAY_ARN
+#from env_config import  TANK_BASE_URL, TANK_FE_BASE_URL,TANK_API_GATEWAY_ARN
 
 from flask import Flask, jsonify
 
@@ -30,7 +30,13 @@ import requests
 
 # Define the WSGI application object
 app = Flask(__name__,static_folder='_tank-frontend', static_url_path='/')
+
+
 app.config.from_object('default_config')
+
+   
+    
+    
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -47,8 +53,8 @@ if os.getenv('AWS_LAMBDA_FUNCTION_NAME'):
 else:
     app.config['IS_LAMBDA'] = False
 
-app.config['TANK_BASE_URL'] = TANK_BASE_URL
-app.config['TANK_FE_BASE_URL'] = TANK_FE_BASE_URL
+#app.config['TANK_BASE_URL'] = TANK_BASE_URL
+#app.config['TANK_FE_BASE_URL'] = TANK_FE_BASE_URL
  
 
 if app.config['IS_LAMBDA']:

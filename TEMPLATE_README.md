@@ -75,6 +75,9 @@ Type "help", "copyright", "credits" or "license" for more information.
 >>> 
 ```
 
+If python3.12 is not installed, install it using Homebrew
+`brew install python@3.12`
+
 Create the Virtual Environment in the root folder of the project
 
 `python3.12 -m venv venv`
@@ -175,9 +178,13 @@ STEP 9: Setup a customized domain
 - Go to the AWS console > API Gateway and create a new Custom Domain Name
 - Select a new subdomain under an existing ACM Certificate. 
 - If you must use a new domain, you need to create the ACM certificate first (out of the scope of this document)
-- Save the Custom Domain and go to the API mappings. You'll be able to select the API that you just deployed and the stage, save that. 
+- Create a  Custom Domain and go to the API mappings. You'll be able to select the API that you just deployed and the stage, save that. 
 - This alone won't automatically redirect all traffic to your application. You still need to create a CN Record in your domain.
-- The CN Record should have as a host the subdomain that you created and as target the API URL (without the "https://" part)
+
+VERY IMPORTANT: The value of the CNRECORD is not the gateaway URL but the CUSTOM DOMAIN URL. They look similar but they are not the same
+
+- To get the right value, go to API Gateway > Custom Domain Names 
+- Select the Custom Domain Name and look for "API Gateway domain name" copy and paste it as is
 - Save that record and almost immediately you'll be able to see your app in that subdomain. 
 
 
