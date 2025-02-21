@@ -34,7 +34,7 @@ class SchdModel:
                
             rule_arn = response_1['RuleArn']
         
-        except as e:
+        except Exception as e:
             
             '''
             A successful response_1 looks like this: 
@@ -44,7 +44,7 @@ class SchdModel:
             
             You could get the following errors: 
             
-            1. AccessDeniedException: The IAM role doesn’t have the necessary permissions to create the rule.
+            1. AccessDeniedException: The IAM role doesn't have the necessary permissions to create the rule.
                 Solution: Ensure the AWS user has events:PutRule permission in IAM.
             2. ValidationException: The ScheduleExpression is incorrect.
                 Solution: Make sure you are using a valid cron or rate expression (rate(5 minutes), cron(0 12 * * ? *)).
@@ -79,7 +79,7 @@ class SchdModel:
                     ]
         
             )
-        except as e:
+        except Exception as e:
             
             '''
             A successful response looks like this:

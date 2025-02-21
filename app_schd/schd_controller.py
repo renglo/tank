@@ -79,7 +79,7 @@ class SchdController:
     def verify_rule(self,portfolio,org,timer):
         
         rule_name = "cronjob_"+portfolio+"_"+org+"_"+timer        
-        result = self.SHM.verify_rule(rule_name)
+        result = self.SHM.find_rule(rule_name)
         
         return result
     
