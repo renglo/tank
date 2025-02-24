@@ -131,12 +131,12 @@ def not_found(error):
     
     app.logger.info(f'Original URL to be redirected: {request.url}')
     
-    
+    '''
     ## IF URL USES THE API GATEWAY URL WE DETECT IT AND REDIRECT IT TO THE MAIN BASE URL
     
     # 1 : Assemble the base url from TANK_API_GATEWAY_ARN
     tank_api_gateway_arn = app.config['TANK_API_GATEWAY_ARN']
-    app.logger.info(f'TANK_API_GATEWAY_ARN is: {tank_api_gateway_arn}')
+    app.logger.info(f'TANK_API_GATEWAY_ARN is:: {tank_api_gateway_arn}')
     if tank_api_gateway_arn is None:
         app.logger.info('TANK_API_GATEWAY_ARN is not set.')
         return app.send_static_file('index.html')  # or handle the error as needed
@@ -158,8 +158,12 @@ def not_found(error):
         new_url = f"{app.config['TANK_BASE_URL']}/{effective_path}"
         #app.logger.info(f'Routing to Flask: {new_url}')
         #return redirect(new_url)
-        app.logger.info(f'Handling route in Flask: {effective_path}')
-        return get_route_handler(effective_path)
+        app.logger.info(f'Handling route in Flask: /{effective_path}')
+        #app.logger.info(f'Handling route in Flask: /ping')
+        return get_route_handler(f'/{effective_path}')
+        #return get_route_handler(f'/ping')
+
+    '''
     
     app.logger.info('Routing to React: ' + request.url)
     return app.send_static_file('index.html')
@@ -201,9 +205,6 @@ def ping():
         'time': time.time(),      
         }
         
-
-
-
 
 
 if __name__ == "__main__":

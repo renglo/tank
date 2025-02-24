@@ -22,6 +22,7 @@ class SchdModel:
         - target_url: The HTTPS endpoint that EventBridge should send events to.
         """
         # Create or update the EventBridge rule
+        print('action:create_https_target_events')
         
         try:
             response_1 = self.client.put_rule(
@@ -33,6 +34,9 @@ class SchdModel:
                 return {'success':False,'output':response_1}
                
             rule_arn = response_1['RuleArn']
+            
+            print('action:create_https_target_events')
+            print(response_1)
         
         except Exception as e:
             
@@ -52,7 +56,7 @@ class SchdModel:
                 Solution: Delete unused rules or request a quota increase.
             '''
         
-            return {'success':False,'output':e}
+            return {'success':False,'output':str(e)}
         
 
         
@@ -65,7 +69,7 @@ class SchdModel:
                     Targets=[
                         {
                             'Id': rule_name+'_target',
-                            'Arn':  TANK_API_GATEWAY_ARN+'/'+TANK_ENV+'/GET/_schd/execute_run', # ARN of the API Gateway
+                            'Arn':  TANK_API_GATEWAY_ARN+'/'+TANK_ENV+'/POST/_schd/ping', # ARN of the API Gateway
                             'RoleArn': TANK_ROLE_ARN,  # IAM role to allow EventBridge to invoke HTTPS
                             'Input': json.dumps(payload),
                             'HttpParameters': {
@@ -96,7 +100,7 @@ class SchdModel:
             3.	Malformed Input: Ensure the Input JSON is properly formatted.      
             '''
             
-            return {'success':False,'output':e}
+            return {'success':False,'output':str(e)}
         
         
 
@@ -110,10 +114,50 @@ class SchdModel:
         return {'success':True,
                 'message':'Rule created successfully',
                 'input':input,
-                'output':response
+                'output':response_1
                 } 
     
     
+
+    def delete_https_target_event(self, rule_name):
+        """
+        Delete an EventBridge rule and its associated target.
+        
+        Parameters:
+        - rule_name: Name of the EventBridge rule to delete.
+        
+        Returns:
+        - Dictionary containing success status and operation details
+        """
+        try:
+            # First remove the targets associated with the rule
+            response_1 = self.client.remove_targets(
+                Rule=rule_name,
+                Ids=[rule_name + '_target'],  # Using same target ID format as in create_https_target_event
+                Force=True
+            )
+            
+            if response_1['FailedEntryCount'] > 0:
+                return {'success': False, 'message': 'Failed to remove target', 'output': response_1}
+            
+            # Then delete the rule itself
+            response_2 = self.client.delete_rule(
+                Name=rule_name
+            )
+            
+            return {
+                'success': True,
+                'message': 'Rule and target deleted successfully',
+                'input': {'rule_name': rule_name},
+                'output': {'remove_targets': response_1, 'delete_rule': response_2}
+            }
+            
+        except Exception as e:
+            print(e)
+            return {'success': False, 'message': 'Failed to delete rule', 'output': str(e)}
+    
+    
+
      
     def find_rule(self, rulename):
         """
@@ -139,15 +183,18 @@ class SchdModel:
             ]
         }
         """
+
+        action = 'find_rule'
         
         paginator = self.client.get_paginator('list_rules')
 
         for page in paginator.paginate():
             for rule in page['Rules']:
+                print(f'Rule >>> {rule}')
                 if 'Name' in rule:
                     if rule['Name'] == rulename :
                         if rule['State'] == 'ENABLED': 
-                            return {'success':True,'input':rulename,'output':rule} 
+                            return {'success':True,'action':action,'input':rulename,'output':rule} 
 
         return {'success':False,'input':rulename,'output':False}
   
@@ -183,6 +230,7 @@ class SchdModel:
             now = datetime.utcnow()
             return start_time <= now <= end_time
         return False
+    
     
     
     

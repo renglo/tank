@@ -44,46 +44,49 @@ def timex():
 def list_rules(portfolio,org):   
     return {'success':False}
 
-#NOT IMPLEMENTED
-# Used to get information about an existing rule (it should reflect eventBridge)
-@app_schd.route('/<string:portfolio>/<string:org>/schd_rules/<string:idx>',methods=['GET'])
-@cognito_auth_required
-def get_rule(portfolio,org,idx):   
-    return {'success':False}
 
-#NOT IMPLEMENTED. NOT TESTED
+
+# Used to get information about an existing rule (it should reflect eventBridge)
+@app_schd.route('/<string:portfolio>/<string:org>/rules/<string:name>',methods=['GET'])
+@cognito_auth_required
+def get_rule(portfolio,org,name): 
+
+    response = SHC.find_rule(portfolio,org,name)
+
+    return response
+
+
 # Used to create a new cron rule
-@app_schd.route('/<string:portfolio>/<string:org>/schd_rules',methods=['POST'])
+@app_schd.route('/<string:portfolio>/<string:org>/rules',methods=['POST'])
 @cognito_auth_required
 def create_rule(portfolio,org):   
     action = "create_rule"
     current_app.logger.info('Creating new Rule')
     
     payload = request.get_json() 
-    payload['portfolio'] = portfolio
-    payload['org'] = org
     
-    rule_name = 'cronrule_'+str(random.randint(1000, 9999))
-    schedule_expression = 'rate(1 minute)'
-
-    response = SHC.create_rule(rule_name,schedule_expression,payload)
+    event_payload = {
+      'portfolio':portfolio,
+      'org':org,  
+      'schd_jobs_id': payload['schd_jobs_id'], 
+      'trigger': payload['trigger'], 
+      'author': payload['author'], 
+    }
       
-    return {'success':True,'action':action,'input':payload,'output':response}
+    response = SHC.create_rule(portfolio,org,payload['timer'],payload['schedule_expression'],event_payload)
+      
+    return {'success':response['success'],'action':action,'input':payload,'output':response}
 
 
-#NOT IMPLEMENTED
-# Used to modify an existing cron rule
-@app_schd.route('/<string:portfolio>/<string:org>/schd_rules/<string:idx>',methods=['PUT'])
+# Used if you don't want a recurring run to be executed anymore. 
+@app_schd.route('/<string:portfolio>/<string:org>/rules/<string:name>',methods=['DELETE'])
 @cognito_auth_required
-def update_rule(portfolio,org,idx):   
-    return {'success':False}
-
-#NOT IMPLEMENTED
-# Used if you don't want a recurring run to be executed anymore. (Alternatively, you could deactivate it)
-@app_schd.route('/<string:portfolio>/<string:org>/schd_rules/<string:idx>',methods=['DELETE'])
-@cognito_auth_required
-def delete_rule(portfolio,org,idx):   
-    return {'success':False}
+def delete_rule(portfolio,org,name):   
+    action = "delete_rule"
+    current_app.logger.info('Deleting a Rule')  
+    response = SHC.remove_rule(portfolio,org,name)
+      
+    return {'success':response['success'],'action':action,'input':name,'output':response}
 
 
 # Job Types
@@ -170,34 +173,22 @@ def delete_run(portfolio,org,idx):
 
 
 
-# 1. Route to create a new rule. This is not your regular CRUD. This requires a specialized model
-#Not used yet
-@app_schd.route('/create_rule',methods=['POST'])
-@cognito_auth_required
-def create_rule_x():
-
-    current_app.logger.info('Running Create Rule')
-    
-    result = SHM.create_https_target_event(
-        rule_name='cronrule_'+str(random.randint(1000, 9999)),
-        schedule_expression='rate(1 minute)'
-    )
-    
-    
-    return jsonify(result)
 
 
-#Not used
-@app_schd.route('/execute_run')
-@cognito_auth_required
-def execute_run():
 
-    current_app.logger.info('Executing Rule')
+# Used as a dummy endpoint
+@app_schd.route('/ping/',methods=['POST'])
+def ping():
+
+    timex = time.time()
+    current_app.logger.info(f'Executing Run @::{timex}') 
+    #return {'success':False,'action':'execute_run','output':timex}
+
+    payload = request.get_json()
+    current_app.logger.info(payload)
+    response, status = SHC.create_job_run(payload['portfolio'],payload['org'],payload)
     
-    session['current_user'] = '7e5fb15bb'
-    return {
-        'time': time.time(),  
-    }
+    return jsonify(response), status
 
 
 

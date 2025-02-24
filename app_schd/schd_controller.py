@@ -41,37 +41,37 @@ class SchdController:
     
     def find_rule(self,portfolio,org,timer):
         
-        rule_name = "cronjob_"+portfolio+"_"+org+"_"+timer        
+        rule_name = "cron_"+portfolio+"_"+org+"_"+timer        
         result = self.SHM.find_rule(rule_name)
         
         return result
         
     
-    def create_rule(self,portfolio,org,timer,schedule_expression,handler):
+    def create_rule(self,portfolio,org,name,schedule_expression,payload):
         '''
         Function used to create the cronjob
         '''
         
-        rule_name = "cronjob_"+portfolio+"_"+org+"_"+timer 
-        
-        payload = {
-            'portfolio':portfolio,
-            'org':org,
-            'handler':handler
-        }
-        
+        rule_name = "cron_"+portfolio+"_"+org+"_"+name
+
         result = self.SHM.create_https_target_event(
             rule_name=rule_name,
             schedule_expression=schedule_expression,
             payload=payload
         )
+
         
+        return result
+    
+
+    def remove_rule(self,portfolio,org,name):
         '''
-        result = SHM.create_https_target_event(
-            rule_name='cronrule_'+str(random.randint(1000, 9999)),
-            schedule_expression='rate(1 minute)',
-            payload=payload
-        )'''
+        Function used to create the cronjob
+        '''
+        
+        rule_name = "cron_"+portfolio+"_"+org+"_"+name
+        
+        result = self.SHM.delete_https_target_event(rule_name)
         
         return result
         
@@ -89,6 +89,8 @@ class SchdController:
         '''
         Function that is called by the cronjob 
         '''
+        
+        current_app.logger.debug('Action: create_job_run:')
         
         result = []
         action = 'create_job_run'
@@ -142,52 +144,45 @@ class SchdController:
         response_3 = {'success':False,'output':[]}
         
         
-        if 'handler' in jobdoc:
+        if not 'handler' in jobdoc:
+            
+            result.append({'success':False,'action':action,'handler':'','message':'No handler in the job document'})
+            return result, 400
+        
+        else:
+            
             handler_name = jobdoc['handler']
             handler_class = self.convert_module_name_to_class(jobdoc['handler'])
         
-            # Example data to pass to classes
             # You could send anything coming in the payload
             handler_input_data = {'portfolio': portfolio,'org':org,'handler':handler_name}
-
             response_3 = self.SHL.load_and_run(handler_name, handler_class, payload = handler_input_data)
-            #response_3 = {'success':False,'output':[]}
-            
-            
+             
             current_app.logger.debug(f'Handler output:{response_3}')
             
             
             if not response_3['success']:
                 result.append({'success':False,'action':action,'handler':handler_name,'input':handler_input_data,'output':response_3})
-                return result, 400
+                #response_3b = self.DCC.a_b_post(portfolio,org,'schd_runs',json.dumps(response_3),'application/json',False)
+                #return result, 400
             
             result.append({'success':True,'action':action,'handler':handler_name,'input':handler_input_data,'output':response_3})
           
             #UP FROM HERE , OK   
-        
-        else: 
-            result.append({'success':False,'action':action,'handler':'','message':'No handler in the job document'}) 
-            return result, 400
-        
-        
-        
-        json_doc = json.dumps(response_3)
-        
+             
         #Save response_3 to S3, You'll store the s3 url in the change['output']
-        response_3b = self.DCC.a_b_post(portfolio,org,'schd_jobs',json_doc,'application/json',False)
+        iso_date = datetime.now().strftime('%Y-%m-%d')
+        response_3b = self.DCC.a_b_post(portfolio,org,f'schd_runs/{iso_date}',json.dumps(response_3),'application/json',False)
         
-        
-        
-        
-        #DOWN FROM HERE , OK
-        
+
+        # Check s3 Response
         if response_3b['success']:
             if 'path' in response_3b:
                 output_doc = response_3b['path']
             else:
-                output_doc = 'Output unavailable..'
+                output_doc = 'Could not store in S3..'
         else:
-            output_doc = 'Output unavailable.'
+            output_doc = 'Could not store in S3.'
         
            
         
@@ -253,3 +248,21 @@ class SchdController:
 
    
         return result, 200
+
+    def delete_rule(self, rule_name):
+        try:
+            # List rules before deletion
+            rules_before = eventbridge.list_rules(NamePrefix=rule_name)
+            logger.info(f"Rules before deletion: {rules_before}")
+            
+            # Delete the rule
+            response = eventbridge.delete_rule(Name=rule_name)
+            
+            # List rules after deletion to confirm
+            rules_after = eventbridge.list_rules(NamePrefix=rule_name)
+            logger.info(f"Rules after deletion: {rules_after}")
+            
+            return response
+        except Exception as e:
+            logger.error(f"Error deleting rule: {str(e)}")
+            raise
