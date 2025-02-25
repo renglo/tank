@@ -34,7 +34,11 @@ upstream        https://github.com/renglo/tank.git (push)
 
 And then reapply your changes on top of the latest template updates, avoiding a merge commit.
 
-`git rebase upstream/main`
+`git rebase upstream/main` #DEPRECATED
+
+Alternativelly, try this to avoid replay old commits
+Git will track the last time you rebased, preventing unnecessary old commits from being replayed.
+`git pull --rebase upstream main`
 
 
 If there are conflicts you'll have to resolve them. 

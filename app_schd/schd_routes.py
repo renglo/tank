@@ -74,8 +74,9 @@ def create_rule(portfolio,org):
     }
       
     response = SHC.create_rule(portfolio,org,payload['timer'],payload['schedule_expression'],event_payload)
+    status = 200 if response['success'] else 400
       
-    return {'success':response['success'],'action':action,'input':payload,'output':response}
+    return {'success':response['success'],'action':action,'input':payload,'output':response}, status
 
 
 # Used if you don't want a recurring run to be executed anymore. 
