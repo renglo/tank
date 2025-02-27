@@ -29,7 +29,7 @@ from zappa.handler import LambdaHandler
 import requests
 
 # Define the WSGI application object
-app = Flask(__name__,static_folder='_tank-frontend', static_url_path='/')
+app = Flask(__name__,static_folder='_tower', static_url_path='/')
 
 
 app.config.from_object('default_config')

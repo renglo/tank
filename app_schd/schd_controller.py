@@ -23,20 +23,7 @@ class SchdController:
         
 
 
-    def convert_module_name_to_class(self,input_string):
-        # Step 1: Split the string at '/'
-        after_slash = input_string.split('/')[-1]
-        
-        # Step 2: Replace '_' with spaces
-        words = after_slash.replace('_', ' ')
-        
-        # Step 3: Capitalize the first letter of each word
-        capitalized_words = words.title()
-        
-        # Step 4: Remove spaces
-        result = capitalized_words.replace(' ', '')
-        
-        return result
+    
     
     
     def find_rule(self,portfolio,org,timer):
@@ -104,8 +91,8 @@ class SchdController:
             else:
                 result.append(response_1)
                 return {'success': False,'action':'get_job_document' ,'message': 'Error getting job','input':payload,'output':response_1}, 400 
-            
-         
+        
+        result.append({'success':True,'action':action,'input':payload,'output':response_1})      
         current_app.logger.debug('Job document check:',response_1)
         
         #2. Create the schd_runs document 
@@ -151,22 +138,23 @@ class SchdController:
         
         else:
             
-            handler_name = jobdoc['handler']
-            handler_class = self.convert_module_name_to_class(jobdoc['handler'])
+            handler_name = jobdoc['handler']  
         
             # You could send anything coming in the payload
             handler_input_data = {'portfolio': portfolio,'org':org,'handler':handler_name}
-            response_3 = self.SHL.load_and_run(handler_name, handler_class, payload = handler_input_data)
+            response_3 = self.SHL.load_and_run(handler_name, payload = handler_input_data)
              
             current_app.logger.debug(f'Handler output:{response_3}')
             
             
             if not response_3['success']:
+                status = 400
                 result.append({'success':False,'action':action,'handler':handler_name,'input':handler_input_data,'output':response_3})
                 #response_3b = self.DCC.a_b_post(portfolio,org,'schd_runs',json.dumps(response_3),'application/json',False)
                 #return result, 400
-            
-            result.append({'success':True,'action':action,'handler':handler_name,'input':handler_input_data,'output':response_3})
+            else:  
+                status = 200
+                result.append({'success':True,'action':action,'handler':handler_name,'input':handler_input_data,'output':response_3})
           
             #UP FROM HERE , OK   
              
@@ -206,7 +194,7 @@ class SchdController:
         self.DAC.refresh_s3_cache(portfolio, org, 'schd_runs', None)
         
         
-        return result, 200
+        return result, status
         
         
     
@@ -231,10 +219,9 @@ class SchdController:
             
         else:
             handler_name = tool + '/' + handler
-            handler_class = self.convert_module_name_to_class(handler_name)
             handler_input_data = payload
 
-            response = self.SHL.load_and_run(handler_name, handler_class, payload = handler_input_data)
+            response = self.SHL.load_and_run(handler_name, payload = handler_input_data)
             
             current_app.logger.debug(f'Handler output:{response}')
             
