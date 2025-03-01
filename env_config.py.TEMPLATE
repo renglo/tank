@@ -1,11 +1,14 @@
-# Tank Environment
+WL_NAME='Garbanzo'
+
 TANK_BASE_URL = ''
 TANK_FE_BASE_URL = ''
 TANK_DOC_BASE_URL = ''
 TANK_AWS_REGION = ''
 
+#Crontab/Cronjob
 TANK_API_GATEWAY_ARN = ''
 TANK_ROLE_ARN = ''
+TANK_ENV = ''
 
 
 # DynamoDB
@@ -14,11 +17,8 @@ DYNAMODB_BLUEPRINT_TABLE = ''
 DYNAMODB_RINGDATA_TABLE = ''
 DYNAMODB_REL_TABLE = ''
 
-# Use a secure, unique and absolutely secret key for
-# signing the data.
-CSRF_SESSION_KEY = ''
 
-# Secret key for signing cookies
+CSRF_SESSION_KEY = ''
 SECRET_KEY = ''
 
 
