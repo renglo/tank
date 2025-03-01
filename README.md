@@ -159,7 +159,33 @@ You need to build the Tower react app. It all gets reduced to a JS and a CSS fil
 VERY IMPORTANT: Double check that the Symbolic Link in Tank is pointing to the /dist folder in the Tower repository
 
 
-### Step 10: Setting up the cloud
+
+### Step 10: Installing the Tool dependencies
+
+Because the tools live outside the Tower repository, they don't share the libraries. 
+You need to install the libraries used by the tools in the /tools folder. 
+
+`cd tools`
+`npm install recharts`
+`npm install react-router-dom`
+`npm install lucide-react`
+
+This will automatically create the `node_modules` folder and the files `package-lock.json`, `package.json` and `tscongif.json`
+
+Create a file called `tsconfig.json` file and place it inside of /tool. The contents of the file are as follows:
+
+{
+    "compilerOptions": {
+        "baseUrl": ".",
+        "paths": {
+        "*": ["tower/node_modules/*"],
+        "@tools/*": ["tools/*"]
+        }
+    }
+}
+
+
+### Step 11: Setting up the cloud
 
 The continuation of this process is explained in the document CLOUD_README.md
 
