@@ -191,7 +191,7 @@ class SchdController:
         current_app.logger.debug(f'Record handler output in run document:{response_4}')
         result.append({'action':action,'input':changes,'output':response_4})
         
-        self.DAC.refresh_s3_cache(portfolio, org, 'schd_runs', None)
+        #self.DAC.refresh_s3_cache(portfolio, org, 'schd_runs', None)
         
         
         return result, status

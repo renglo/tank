@@ -170,3 +170,4 @@ cython_debug/
 
 # Mac stuff
 .DS_Store
+run.sh
