@@ -92,12 +92,13 @@ class SchdLoader:
             current_app.logger.debug(f"Module {module_name}:{class_name} was found.")
         
         try:
-            # Remove the relative path notation and use absolute import
-            path = f"tools.{module_path}.handlers.{module_name}"
-            
             sys.path.append(os.path.abspath(".."))  # Add parent directory to sys.path
-            print(f'Loading module:{path}')
-            module = importlib.import_module(path)
+            
+            # Convert file path to module path format (using dots)
+            module_path = f"_tools.{module_path}.handlers.{module_name}"
+            
+            print(f'Loading module:{module_path}')
+            module = importlib.import_module(module_path)
             
             print(f'Getting class:{class_name}')
             class_ = getattr(module, class_name)

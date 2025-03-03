@@ -94,11 +94,15 @@ class SchdModel:
             }
             
             
+            
 
             1.	Invalid Target ARN: Ensure the ARN provided is correct and belongs to a supported service (Lambda, SQS, etc.).
             2.	Permission Issues: The EventBridge rule might not have permissions to invoke the target (check IAM roles).
-            3.	Malformed Input: Ensure the Input JSON is properly formatted.      
+            3.	Malformed Input:Ensure the Input JSON is properly formatted.      
             '''
+            
+            #If creating the target failed, you should delete the rule you created in the first part 
+            # TO DO !!!!
             
             return {'success':False,'output':str(e)}
         
