@@ -28,6 +28,19 @@ def get_available_aws_profiles():
 
     return profiles if profiles else ["default"]
 
+def get_profile_region(profile_name: str) -> str:
+    """Get the region for a given AWS profile from ~/.aws/config"""
+    config = configparser.ConfigParser()
+    config_path = os.path.expanduser("~/.aws/config")
+    
+    if os.path.exists(config_path):
+        config.read(config_path)
+        profile_section = f"profile {profile_name}" if profile_name != "default" else "default"
+        if profile_section in config and "region" in config[profile_section]:
+            return config[profile_section]["region"]
+    
+    return "us-east-1"  # Default region if not specified
+
 def load_blueprint_files() -> List[Dict]:
     """Load all JSON files from the blueprints directory."""
     current_dir = Path(__file__).parent
@@ -78,13 +91,17 @@ def upload_blueprints(dynamodb, table_name: str, blueprints: List[Dict]) -> Dict
 
     return results
 
-def run(env_name: str, aws_profile: str) -> Dict[str, List[str]]:
+def run(env_name: str, aws_profile: str, region: str = None) -> Dict[str, List[str]]:
     """Programmatic entry point that returns structured data"""
-    # Initialize Boto3 Session with selected profile
-    boto3.setup_default_session(profile_name=aws_profile)
-    dynamodb = boto3.resource("dynamodb")
+    # Get region from profile if not specified
+    if region is None:
+        region = get_profile_region(aws_profile)
 
-    print(f"🔄 Using AWS Profile: {aws_profile}")
+    # Initialize Boto3 Session with selected profile and region
+    boto3.setup_default_session(profile_name=aws_profile)
+    dynamodb = boto3.resource("dynamodb", region_name=region)
+
+    print(f"🔄 Using AWS Profile: {aws_profile} in region {region}")
     
     # Load blueprints from JSON files
     print("📂 Loading blueprint files...")
@@ -111,11 +128,16 @@ def main():
         default="default",
         help=f"Specify the AWS profile to use (Available: {', '.join(available_profiles)})"
     )
+    parser.add_argument(
+        "--aws-region",
+        type=str,
+        help="AWS region to use (defaults to profile's region or us-east-1)"
+    )
 
     args = parser.parse_args()
     
     # Run the upload
-    results = run(args.environment_name, args.aws_profile)
+    results = run(args.environment_name, args.aws_profile, args.aws_region)
     
     # Print results
     print("\n📊 Upload Summary:")

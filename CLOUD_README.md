@@ -14,12 +14,12 @@ Create a user called 'tt-installer' in IAM that uses an AWS managed policy calle
 ### Step 1b: (ALTERNATIVE STEP) CREATING INSTALLER USER IN THIRD PARTY AWS ACCOUNT
 
 Ask the third party Admin to 
-1. Create a user 
-2. Create a user group
+1. Create a user (tt_dev) 
+2. Create a user group (tt_dev_group)
 3. Assign the AWS managed role "AdministratorAccess" to the user group
 4. Assign the user to that user group
     In order to do this, they'll have to create a group. The group will have assigned the role, the user will be assinged to that group.
-5. Create the Acess Key ID and Secret Access Key that will allow the app to gain access
+5. Create the Acess Key ID and Secret Access Key that will allow the app to gain access (select : Local Code)
 
 
 ### Step 2: Create AWS Profile
@@ -48,14 +48,16 @@ You'll use the profile name to run a series of installation scripts.
 
 
 
-### Step 3: Creat the Cloud dependencies
+### Step 3: Create the Cloud dependencies
 
-Follow the instructions in  /installer/README.md on how to install the Cloud Dependencies
+Follow the instructions in  tank/installer/ENVIRONMENT_README.md on how to install the Cloud Environment
 
+Come back after your are done with that step.
 
 
 Update your configuration files with the latest tokens and ids obtained in this step: 
 tank/env_config.py
+tower/.env.development.*
 tower/.env.production.*
 
 
@@ -66,7 +68,9 @@ Note: If the Zappa app already exists, put the role IAM in zappa_settings.json i
 
 
 Install Zappa
+`cd tank`
 `pip install zappa`
+`pip install setuptools`
 
 Run their init wizard that will walk you through the creation of the environment
 `zappa init`
@@ -154,20 +158,29 @@ Open it and add the additional configurations (including the role_name)
 }
 
 
+One more step before deploying!
+If the react application has never been built, you need to do that before deploying Zappa
+
+`cd tower`
+`yarn build`
+
 
 Now run 
 `zappa deploy <environment_name>_<dev|test|prod>`
 
 
+You get something like this:
 
+```
 Deploying API Gateway..
 Waiting for lambda function [tank-lquant-prod] to be updated...
 Deployment complete!: https://<id>.execute-api.<aws_region>.amazonaws.com/<environment_name>_<dev|test|prod>
+```
 
 
-You should be able to test whether the app is there by going to 
+You should be able to test whether the app is running by going to 
 `https://<id>.execute-api.<aws_region>.amazonaws.com/<environment_name>_<dev|test|prod>/timex` 
- It should return the local time. 
+ It should return the server time. 
 
  You won't be able to access the Application yet, because this url is already using the first position in the path. Tank and Tower depend on the URL for their routing
 

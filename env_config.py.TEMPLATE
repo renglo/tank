@@ -1,14 +1,14 @@
 WL_NAME='Garbanzo'
 
-TANK_BASE_URL = ''
-TANK_FE_BASE_URL = ''
-TANK_DOC_BASE_URL = ''
-TANK_AWS_REGION = ''
+TANK_BASE_URL = 'x'
+TANK_FE_BASE_URL = 'x'
+TANK_DOC_BASE_URL = 'x'
+TANK_AWS_REGION = 'x'
 
 #Crontab/Cronjob
-TANK_API_GATEWAY_ARN = ''
-TANK_ROLE_ARN = ''
-TANK_ENV = ''
+TANK_API_GATEWAY_ARN = 'x'
+TANK_ROLE_ARN = 'x'
+TANK_ENV = 'x'
 
 
 # DynamoDB
@@ -23,9 +23,9 @@ SECRET_KEY = ''
 
 
 # flask_cognito
-COGNITO_REGION = ''
-COGNITO_USERPOOL_ID = ''
-COGNITO_APP_CLIENT_ID = ''
+COGNITO_REGION = 'x'
+COGNITO_USERPOOL_ID = 'x'
+COGNITO_APP_CLIENT_ID = 'x'
 COGNITO_CHECK_TOKEN_EXPIRATION = True  # Optional, default is True
 
 

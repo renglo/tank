@@ -1,9 +1,11 @@
-#README
+#ENVIRONMENT README
 
 
-##1. Create a Virtual Environment
+##1. Create a Virtual Environment if it doesn't exist
 
+`cd tank`
 `python3.12 -m venv venv`
+`source venv/bin/activate`
 
 Activate it
 `source venv/bin/active
@@ -15,11 +17,14 @@ Activate it
 ##3. List available AWS profiles. There should be at least one
 `aws configure list-profiles`
 
+You should see the profile that points to the cloud you want to deploy this to. 
+
 
 ##4. Run the deploy environment for TT
 This will create the Dynamo tables, create the Cognito user pool, create the IAM policy, create the Role and link everything together. 
 Replace <environment_name> with the actual name of the environment you want to create. Replace <aws_profile> 
 
+`cd installer`
 `python deploy_environment.py <environment_name> --aws-region <aws_region>  --aws-profile <aws_profile>`
 
 

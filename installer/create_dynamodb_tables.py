@@ -81,13 +81,13 @@ def create_table(dynamodb, table_name, partition_key, sort_key=None, local_secon
     waiter.wait(TableName=table_name)
     print(f"✅ Table '{table_name}' is now active.")
 
-def run(env_name: str, aws_profile: str) -> Dict[str, str]:
+def run(env_name: str, aws_profile: str, region: str = "us-east-1") -> Dict[str, str]:
     """Programmatic entry point that returns structured data"""
     # Initialize Boto3 Session with selected profile
     boto3.setup_default_session(profile_name=aws_profile)
-    dynamodb = boto3.client("dynamodb")
+    dynamodb = boto3.client("dynamodb", region_name=region)
 
-    print(f"🔄 Using AWS Profile: {aws_profile}")
+    print(f"🔄 Using AWS Profile: {aws_profile} in region {region}")
 
     # Define tables and their keys
     tables = [
@@ -132,11 +132,17 @@ def main():
         default="default",
         help=f"Specify the AWS profile to use (Available: {', '.join(available_profiles)})"
     )
+    parser.add_argument(
+        "--region",
+        type=str,
+        default="us-east-1",
+        help="AWS region to create the tables in (default: us-east-1)"
+    )
 
     args = parser.parse_args()
     
     # Run the deployment
-    table_arns = run(args.environment_name, args.aws_profile)
+    table_arns = run(args.environment_name, args.aws_profile, args.region)
     
     # Print results
     print("\n✅ DynamoDB Tables Created Successfully!\n")
