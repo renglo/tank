@@ -234,14 +234,14 @@ class DataController:
         fields = blueprint['fields']
 
         
-        current_app.logger.info("post_a_b raw arguments from the Form fields:"+str(payload))
+        current_app.logger.debug("post_a_b raw arguments from the Form fields:"+str(payload))
 
 
         for field in fields:
        
             #DATA
 
-            current_app.logger.info(field['name'])
+            current_app.logger.debug(field['name'])
 
             #Verify submitted field exists in the blueprint
             new_raw = ''
@@ -348,7 +348,7 @@ class DataController:
 
         #1. Pull the document that we need to update
         updated_item = self.DAM.get_a_b_c(portfolio,org,ring,idx) 
-        current_app.logger.debug('Item from DB:'+str(updated_item))
+        #current_app.logger.debug('Item from DB:'+str(updated_item))
 
         #2. Pull the Blueprint listed in that document
 
@@ -361,8 +361,8 @@ class DataController:
         #3. Convert incoming request payload to JSON
 
         
-        current_app.logger.debug('Payload:'+str(payload))
-        current_app.logger.debug(blueprint['fields']) 
+        #current_app.logger.debug('Payload:'+str(payload))
+        #current_app.logger.debug(blueprint['fields']) 
 
         #4. Check that the payload follows the Blueprint
         putNeeded = False

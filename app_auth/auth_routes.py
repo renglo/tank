@@ -125,7 +125,7 @@ def invite_user_post():
         return jsonify(response_1), response_1['status']
     
     payload = response_1['document']
-    current_app.logger.debug('Payload:'+str(payload))
+    #current_app.logger.debug('Payload:'+str(payload))
 
     response_2 = authorization_check('_auth','inviteUser',entity_id = payload['team_id'])
     if not response_2['success']:

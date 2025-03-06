@@ -44,7 +44,7 @@ class BlueprintModel:
                 if len(items)==0:
                     return {"message": "Document not found"}
                 item = items[0]
-                current_app.logger.info('items from DB:'+str(items))
+                #current_app.logger.info('items from DB:'+str(items))
                        
             else:
                 response = self.blueprints_table.get_item(Key={'irn': irn, 'version': v})        
