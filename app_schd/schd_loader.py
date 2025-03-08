@@ -126,8 +126,6 @@ class SchdLoader:
         class_name = self.convert_module_name_to_class(module_name)
         current_app.logger.info(f'Attempting to load class:{class_name}')
         
-        # examples of module_name: gartic/create_new_game , gartic/operate_game  
-        #module_name = module_name.replace("/", ".")
         module_parts = module_name.split("/")
         
         instance = self.load_class(module_parts[0],module_parts[1], class_name, *args, **kwargs)
@@ -164,13 +162,4 @@ class SchdLoader:
 if __name__ == "__main__":
     SHL = SchdLoader()
 
-    current_app.logger.error("Available Modules:", SHL.modules)
-
-    # Example data to pass to classes
-    data = {"message": "Hello from main.py!"}
-
-    # Load and run `CreatePost` from `social.create_post`
-    SHL.load_and_run("social.create_post", "CreatePost", data)
-
-    # Load and run `CheckForWinners` from `gartic.check_for_winners`
-    SHL.load_and_run("gartic.check_for_winners", "CheckForWinners", "Winner Data")
+    

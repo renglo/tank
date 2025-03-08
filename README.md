@@ -21,7 +21,7 @@ Initiating the local environment
 `git clone https://github.com/renglo/twitter.git`
 
 ###Step 5: Clone the application specific tools.
-`git clone https://github.com/renglo/gartic.git`
+`git clone https://github.com/renglo/<tool_name>.git`
 
 
 
