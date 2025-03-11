@@ -303,6 +303,8 @@ You should get a message like this one
 
 ### Step 11: Setting up the cloud
 
+IMPORTANT: If you are NOT creating a brand new Cloud Environment and instead are collaborating on an existing one, skip this step and go to Step 12. 
+
 The continuation of this process is explained in the document 
 
 ```
@@ -311,6 +313,50 @@ tank/CLOUD_README.md
 
 You can repeat this process in any computer that will be developing a TankTower tool.
 
+
+
+
+### Step 12: Setting up AWS Credentials
+
+
+ Install awscli 
+
+ ```
+ brew install awscli
+ ```
+
+ Verify installation
+
+ ```
+ aws --version
+ ```
+
+ Run configuration script
+
+ ```
+ aws configure
+ ```
+
+ You'll get a prompt like the following. Enter the access key, secret key and output. Leave output as None.
+ YOUR_ACCESS_KEY, YOUR_SECRET_KEY should be provided by your Cloud Admin.
+
+```
+AWS Access Key ID [None]: YOUR_ACCESS_KEY
+AWS Secret Access Key [None]: YOUR_SECRET_KEY
+Default region name [None]: us-east-1  # (or your preferred region)
+Default output format [None]: json
+```
+
+
+### Step 13: Setting up the configuration files
+
+You need to install 3 configuration files in your local environments for your local copy to be able to connect to the cloud: 
+
+Ask your project admin for the config files for your project. 
+
+`tank/env_config.py`
+`tower/.env.development.*`
+`tower/.env.production.*`
 
 
 

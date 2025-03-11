@@ -30,7 +30,7 @@ class BlueprintModel:
 
         irn = 'irn:blueprint:' + handle +':'+ name
 
-        current_app.logger.debug('irn:'+irn+' v:'+v)
+        current_app.logger.debug('Get Blueprint '+irn+' v:'+v)
         
 
         try:

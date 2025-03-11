@@ -160,6 +160,29 @@ def invite_user_put():
     return jsonify(response), response['status']
 
 
+
+#TANK-FE
+@app_auth.route('/user/token', methods=['GET'])
+@cognito_auth_required
+def get_user_token():
+    '''
+    Returns JWT token from the Authorization header
+    '''
+    
+    if not authorization_check('_auth','getJWT'):
+        return False
+
+    # Get the raw JWT token from the Authorization header
+    auth_header = request.headers.get('Authorization')
+    if auth_header and auth_header.startswith('Bearer '):
+        token = auth_header.split(' ')[1]  # Get the token part after 'Bearer '
+        return {'success': True, 'output': token}, 200
+    else:      
+        return {'success': False, 'message': 'No valid token found'}, 400
+
+    
+
+
 #TANK-FE
 @app_auth.route('/user', methods=['GET'])
 @cognito_auth_required
@@ -269,6 +292,9 @@ def refresh_tree():
         return jsonify(response['document']), response['status']
     else:
         return jsonify(response), response['status']
+    
+    
+    
     
     
     
