@@ -1,5 +1,4 @@
-Initiating the local environment
-
+# Initiating the local environment
 
 ### A) CLONING THE REPOSITORIES
 
