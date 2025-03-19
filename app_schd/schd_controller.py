@@ -219,22 +219,24 @@ class SchdController:
             
         else:
             handler_name = tool + '/' + handler
-            handler_input_data = payload
 
-            response = self.SHL.load_and_run(handler_name, payload = handler_input_data)
+            response = self.SHL.load_and_run(handler_name, payload = payload)
             
-            current_app.logger.debug(f'Handler output:{response}')
+            print(f'Handler output:{response}')
             
             
             if not response['success']:
-                result.append({'success':False,'action':action,'handler':handler_name,'input':handler_input_data,'output':response})
+                result.append({'success':False,'action':action,'handler':handler_name,'input':payload,'output':response})
                 return result, 400
             
-            result.append({'success':True,'action':action,'handler':handler_name,'input':handler_input_data,'output':response})
+            result.append({'success':True,'action':action,'handler':handler_name,'input':payload,'output':response})
           
 
    
         return result, 200
+    
+ 
+    
 
     def delete_rule(self, rule_name):
         try:

@@ -16,6 +16,7 @@ from app_data.data_routes import app_data
 from app_auth.auth_routes import app_auth
 from app_docs.docs_routes import app_docs
 from app_schd.schd_routes import app_schd
+from app_chat.chat_routes import app_chat
 from flask_cognito import CognitoAuth, cognito_auth_required
 from flask_cognito import cognito_auth_required, current_user, current_cognito_jwt
 
@@ -77,6 +78,7 @@ app.register_blueprint(app_blueprint)
 app.register_blueprint(app_auth)
 app.register_blueprint(app_docs)
 app.register_blueprint(app_schd)
+app.register_blueprint(app_chat)
 
 
 
