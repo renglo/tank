@@ -79,8 +79,8 @@ class ChatController:
 
         index = f"irn:chat:{entity_type}/thread/message:{entity_id}/{thread_id}"
         
-        context = {}
-        input = {}
+        context =  payload['context']
+        input =  payload['input']
         output = payload['output']
         message = payload['message']
         tool_invocations = []
