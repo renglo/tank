@@ -94,6 +94,7 @@ def run(env_name: str, aws_profile: str, region: str = "us-east-1") -> Dict[str,
         {"name": f"{env_name}_blueprints", "partition_key": "irn", "sort_key": "version"},
         {"name": f"{env_name}_entities", "partition_key": "index", "sort_key": "_id"},
         {"name": f"{env_name}_rel", "partition_key": "index", "sort_key": "rel"},
+        {"name": f"{env_name}_chat", "partition_key": "index", "sort_key": "time"},
     ]
 
     # Create tables and collect ARNs
