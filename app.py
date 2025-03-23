@@ -6,6 +6,10 @@ import time
 import os
 import sys
 
+#SOCKET IO
+from flask_socketio import SocketIO
+from flask_socketio import disconnect, emit
+
 #CORS
 from flask_cors import CORS
 
@@ -16,7 +20,7 @@ from app_data.data_routes import app_data
 from app_auth.auth_routes import app_auth
 from app_docs.docs_routes import app_docs
 from app_schd.schd_routes import app_schd
-from app_chat.chat_routes import app_chat
+from app_chat.chat_routes import app_chat, app_chat_socketio_init, socket_auth_required
 from flask_cognito import CognitoAuth, cognito_auth_required
 from flask_cognito import cognito_auth_required, current_user, current_cognito_jwt
 
@@ -32,12 +36,17 @@ import requests
 # Define the WSGI application object
 app = Flask(__name__,static_folder='_tower', static_url_path='/')
 
+# Initialize Socket.IO with CORS support
+socketio = SocketIO(app, 
+    cors_allowed_origins="*",
+    async_mode='threading',
+    logger=True,
+    engineio_logger=True,
+    ping_timeout=60,
+    ping_interval=25
+)
 
 app.config.from_object('default_config')
-
-   
-    
-    
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -45,8 +54,6 @@ logging.getLogger('zappa').setLevel(logging.WARNING)
 app.logger.info('Flask App defined!')
 
 app.logger.info(f'Python Version: {sys.version}')
-
-
 
 # Determine if the app is running on AWS Lambda or locally
 if os.getenv('AWS_LAMBDA_FUNCTION_NAME'):
@@ -65,7 +72,7 @@ if app.config['IS_LAMBDA']:
     CORS(app, resources={r"*": {"origins": [app.config['TANK_FE_BASE_URL']]}})
 else:
     app.logger.info('RUNNING ON LOCAL ENVIRONMENT')  
-    CORS(app, resources={r"/*": {"origins": "http://127.0.0.1:5173"}})
+    CORS(app, resources={r"/*": {"origins": ["http://127.0.0.1:5173", "http://localhost:5173"]}})
 
 
 # Initialize CognitoAuth
@@ -81,7 +88,8 @@ app.register_blueprint(app_schd)
 app.register_blueprint(app_chat)
 
 
-
+# Initialize SocketIO events from the blueprint
+app_chat_socketio_init(socketio)
 
 #Template Filters
 @app.template_filter()
@@ -210,6 +218,7 @@ def ping():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.logger.info("Starting Flask server with Socket.IO...")
+    socketio.run(app, debug=True, port=5000, allow_unsafe_werkzeug=True)
 
 
