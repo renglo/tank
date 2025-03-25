@@ -36,15 +36,7 @@ import requests
 # Define the WSGI application object
 app = Flask(__name__,static_folder='_tower', static_url_path='/')
 
-# Initialize Socket.IO with CORS support
-socketio = SocketIO(app, 
-    cors_allowed_origins="*",
-    async_mode='threading',
-    logger=True,
-    engineio_logger=True,
-    ping_timeout=60,
-    ping_interval=25
-)
+
 
 app.config.from_object('default_config')
 
@@ -88,8 +80,33 @@ app.register_blueprint(app_schd)
 app.register_blueprint(app_chat)
 
 
-# Initialize SocketIO events from the blueprint
-app_chat_socketio_init(socketio)
+
+
+#if not app.config['IS_LAMBDA']:
+if False:
+    # Activate Socket.io only when running locally
+    # It won't work on Lambdas. For that we use AWS Api Gateway WebSockets
+
+    socketio = SocketIO(app, 
+        cors_allowed_origins="*",
+        async_mode='threading',
+        logger=True,
+        engineio_logger=True,
+        ping_timeout=60,
+        ping_interval=25
+    )
+
+    @socketio.on('chat_message')
+    def handle_chat_message(data):
+        try:
+            app.logger.info(f"Received chat message: {data}")
+            # Broadcast the received message back to all connected clients.
+            emit('chat_response', {'message': f"Message received: {data}"}, broadcast=True)
+        except Exception as e:
+            app.logger.error(f"Error handling chat message: {str(e)}")
+
+        
+        
 
 #Template Filters
 @app.template_filter()
@@ -211,14 +228,31 @@ def ping():
     app.logger.info("Ping!: %s", time.time())
     
     return {
-        'ping':True,
+        'pong':True,
         'time': time.time(),      
         }
-        
-
+    
+#NOT USED  
+@app.route('/message',methods=['POST'])
+def real_time_message():
+    
+    app.logger.info("WEBSOCKET MESSAGE!: %s", time.time())
+    
+    payload = request.get_json()
+    app.logger.info(payload)
+    
+    return {
+        'ws':True,
+        'time': time.time(),  
+        'input': payload,    
+        }
+            
+            
 
 if __name__ == "__main__":
     app.logger.info("Starting Flask server with Socket.IO...")
     socketio.run(app, debug=True, port=5000, allow_unsafe_werkzeug=True)
+    
+    # curl -X POST -H "Content-Type: application/json" -d '{"key": "value"}' https://3q6xf5peyc.execute-api.us-east-1.amazonaws.com/woppi_prod_0305a/_chat/message
 
 

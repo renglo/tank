@@ -193,7 +193,7 @@ def ping():
 
 
 
-# Used for onboarding
+# Direct handler runs
 @app_schd.route('/run/<string:tool>/<string:handler>',methods=['POST'])
 @cognito_auth_required
 def direct_run(tool,handler):
