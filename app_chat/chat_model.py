@@ -57,10 +57,12 @@ class ChatModel:
         
         
     def create_chat(self,data):
-
         
+        print(f'create_chat > input:{data}')
+
         try:
             response = self.chat_table.put_item(Item=data)
+            print(f'create_chat > input:{response}')
             current_app.logger.debug('MODEL: Created chat successfully:'+str(data))
             return {
                 "success":True, 
@@ -69,12 +71,14 @@ class ChatModel:
                 "status" : response['ResponseMetadata']['HTTPStatusCode']
                 }
         except ClientError as e:
+            print(f'create_chat > error:{e}')
             return {
                 "success":False, 
                 "message": e.response['Error']['Message'],
                 "document": data,
                 "status" : e.response['ResponseMetadata']['HTTPStatusCode']
                 }
+        
         
     # NOT USED
     def update_chat(self,data):

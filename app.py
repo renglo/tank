@@ -20,7 +20,7 @@ from app_data.data_routes import app_data
 from app_auth.auth_routes import app_auth
 from app_docs.docs_routes import app_docs
 from app_schd.schd_routes import app_schd
-from app_chat.chat_routes import app_chat, app_chat_socketio_init, socket_auth_required
+from app_chat.chat_routes import app_chat
 from flask_cognito import CognitoAuth, cognito_auth_required
 from flask_cognito import cognito_auth_required, current_user, current_cognito_jwt
 
@@ -79,34 +79,6 @@ app.register_blueprint(app_docs)
 app.register_blueprint(app_schd)
 app.register_blueprint(app_chat)
 
-
-
-
-#if not app.config['IS_LAMBDA']:
-if False:
-    # Activate Socket.io only when running locally
-    # It won't work on Lambdas. For that we use AWS Api Gateway WebSockets
-
-    socketio = SocketIO(app, 
-        cors_allowed_origins="*",
-        async_mode='threading',
-        logger=True,
-        engineio_logger=True,
-        ping_timeout=60,
-        ping_interval=25
-    )
-
-    @socketio.on('chat_message')
-    def handle_chat_message(data):
-        try:
-            app.logger.info(f"Received chat message: {data}")
-            # Broadcast the received message back to all connected clients.
-            emit('chat_response', {'message': f"Message received: {data}"}, broadcast=True)
-        except Exception as e:
-            app.logger.error(f"Error handling chat message: {str(e)}")
-
-        
-        
 
 #Template Filters
 @app.template_filter()
@@ -253,6 +225,3 @@ if __name__ == "__main__":
     app.logger.info("Starting Flask server with Socket.IO...")
     socketio.run(app, debug=True, port=5000, allow_unsafe_werkzeug=True)
     
-    # curl -X POST -H "Content-Type: application/json" -d '{"key": "value"}' https://3q6xf5peyc.execute-api.us-east-1.amazonaws.com/woppi_prod_0305a/_chat/message
-
-

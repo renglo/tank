@@ -5,7 +5,6 @@ from app_auth.login_required import login_required
 from flask_cognito import cognito_auth_required, current_user, current_cognito_jwt
 from app_chat.chat_controller import ChatController
 from app_schd.schd_controller import SchdController
-from flask_socketio import disconnect, emit #DEPRECATED
 from functools import wraps
 
 app_chat = Blueprint('app_chat', __name__, url_prefix='/_chat')
@@ -19,151 +18,87 @@ def socket_auth_required(f):
     @wraps(f)
     def wrapped(*args, **kwargs):
         try:
-            current_app.logger.info("Attempting socket authentication...")
-            payload = request.get_json() #Token is sent in every message because lambdas are volatile and we can't rely in 'on connection' socket auth.
-            auth = payload['auth']
-            if not auth:
-                current_app.logger.error("No authentication token provided")
-                #disconnect()
-                return jsonify({'error': 'Authentication failed'}), 401
+            current_app.logger.info("Starting socket authentication process...")
+            payload = request.get_json()
+            
+            if not payload or 'auth' not in payload:
+                current_app.logger.error("Missing payload or auth token in request")
+                return jsonify({'error': 'Authentication token required'}), 401
+            
+            auth_token = payload['auth']
+            if not isinstance(auth_token, str):
+                current_app.logger.error("Invalid auth token format")
+                return jsonify({'error': 'Invalid authentication token format'}), 401
 
-            # Set the token in the request headers so cognito_auth_required can access it
-            with current_app.test_request_context(headers={'Authorization': f'Bearer {auth}'}):
-                cognito_auth_required(lambda: None)()
+            # Set the token in the request headers for cognito authentication
+            with current_app.test_request_context(headers={'Authorization': f'Bearer {auth_token}'}):
+                try:
+                    cognito_auth_required(lambda: None)()
+                except Exception as cognito_error:
+                    current_app.logger.error(f"Cognito authentication failed: {str(cognito_error)}")
+                    return jsonify({'error': 'Invalid or expired authentication token'}), 401
+
             current_app.logger.info("Socket authentication successful")
             return f(*args, **kwargs)
+            
+        except ValueError as ve:
+            current_app.logger.error(f"Invalid request format: {str(ve)}")
+            return jsonify({'error': 'Invalid request format'}), 400
         except Exception as e:
-            current_app.logger.error(f"Socket authentication error: {str(e)}")
-            return jsonify({'error': 'Socket authentication failed'}), 401
-            #disconnect()
+            current_app.logger.error(f"Unexpected error during socket authentication: {str(e)}")
+            return jsonify({'error': 'Internal authentication error'}), 500
     return wrapped
 
-
-
-#DEPRECATED
-# Socket IO
-# You would need to include "app_chat_socketio_init(socketio)" in app.py to initialize these routes. 
-def app_chat_socketio_init(socketio):
-    current_app.logger.info("Initializing chat socket handlers...")
-    
-    # Use a specific namespace for chat events (e.g. '/chat')
-    @socketio.on('connect', namespace='/_chat')
-    @socket_auth_required
-    def handle_connect():
-        try:
-            current_app.logger.info(f"User connected: {current_user.username}")
-        except Exception as e:
-            current_app.logger.error(f"Error in handle_connect: {str(e)}")
-            disconnect()
-
-    @socketio.on('disconnect', namespace='/_chat')
-    def handle_disconnect():
-        current_app.logger.info("User disconnected")
-
-    @socketio.on('connect_error', namespace='/_chat')
-    def handle_connect_error(error):
-        current_app.logger.error(f"Connection error: {str(error)}")
-
-    @socketio.on('chat_message')
-    def handle_chat_message(data):
-        try:
-            current_app.logger.info(f"Received chat message: {data}")
-            # Broadcast the received message back to all connected clients.
-            emit('chat_response', {'message': f"Message received: {data}"}, broadcast=True)
-        except Exception as e:
-            current_app.logger.error(f"Error handling chat message: {str(e)}")
-
-    current_app.logger.info("Chat socket handlers initialized successfully")
-    
    
-   
-   
-    
     
  # Web Socket endpoints
  
 @app_chat.route('/message',methods=['POST'])
 @socket_auth_required
 def real_time_message():
-    
-    current_app.logger.info("WEBSOCKET MESSAGE IN THE CHAT APP")
-    payload = request.get_json() 
-    current_app.logger.info(payload)
-    
-    
-    '''
-    payload =
-    {
-        'action':'message',
-        'auth':<The access token>,
-        'data':<message>, 
-        'handler':<tool/handler_name>
-        'entity_type':<entity_type>,
-        'entity_id':<entity_id>,
-        'thread_id':<thread_id>,
-        'portfolio':<portfolio>,
-        'org':<org>
-    }
-    '''
-    
-    # Call handler
-    handler = payload['handler']
-    tool, handler_name = handler.split('/')
-    response, status = SHC.direct_run(tool, handler_name, payload)
-    
-    current_app.logger.debug(response)
-    
-    '''
-    response = 
-    {
-       'entity_type':<entity_type>,
-       'entity_id':<entity_id>,
-       'thread_id':<thread_id>,
-       'context':{
-           'portfolio':<portfolio>,
-           'org':<org>
-           },
-       'input': <object sent to the handler>,
-       'output': <object showing results of handler run>,
-       'message': <message>
-    }
-    '''
-    
+    try:
+        current_app.logger.info("WEBSOCKET MESSAGE IN THE CHAT APP")
+        payload = request.get_json()
+        if not payload:
+            current_app.logger.error("No payload received")
+            return jsonify({'error': 'No payload received'}), 400
+            
+        current_app.logger.info(payload)
         
-    
-    
-    
-    '''
-    THIS IS TO BE IMPLEMENTED IN THE HANDLERS AND REMOVED FROM HERE
-    - The handler will emit the broadcast messages to the WebHook in real time
-      you don't need to do it here 
-    - How are we going to deliver the right message updates to the right chats?
-    - Do We need to keep track of the conversation id to do that. Or the user id or the combination?
-    - All state should exist in the DB. 
-    '''
-    # Create a client for the API Gateway Management API.
-    '''
-    apigw_client = boto3.client("apigatewaymanagementapi", endpoint_url=endpoint_url)
-      
-    # Broadcast message to chat group   
-    connections = conn_table.scan().get("Items", []) # conn_table keeps track of all current connections to the chat
-    for connection in connections:
+        # Validate required fields
+        required_fields = ['handler', 'action', 'auth', 'data']
+        missing_fields = [field for field in required_fields if field not in payload]
+        if missing_fields:
+            current_app.logger.error(f"Missing required fields: {missing_fields}")
+            return jsonify({'error': f'Missing required fields: {missing_fields}'}), 400
+        
+        # Call handler
+        handler = payload['handler']
         try:
-            apigw_client.post_to_connection(
-                ConnectionId=connection["connectionId"],
-                Data=json.dumps(message_item)
-            )
-        except apigw_client.exceptions.GoneException:
-            conn_table.delete_item(Key={"connectionId": connection["connectionId"]})
-
-    '''
-    
-    
-    return {
-        'ws':True, 
-        'input': payload,  
-        'output':response  
-        }  
+            tool, handler_name = handler.split('/')
+        except ValueError:
+            current_app.logger.error(f"Invalid handler format: {handler}")
+            return jsonify({'error': 'Invalid handler format. Expected format: tool/handler_name'}), 400
+            
+        response = SHC.direct_run(tool, handler_name, payload)
+        
+        # Handle the case where response is a tuple (response, status)
+        if isinstance(response, tuple):
+            response_data, status_code = response
+        else:
+            response_data, status_code = response, 200
+            
+        current_app.logger.debug(response_data)
+        
+        return {
+            'ws': True, 
+            'input': payload,  
+            'output': response_data
+        }, status_code
+            
+    except Exception as e:
+        current_app.logger.error(f"Error processing message: {str(e)}")
+        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
     
 
 
