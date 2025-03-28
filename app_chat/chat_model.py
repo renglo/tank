@@ -3,7 +3,7 @@
 from flask import redirect,url_for, jsonify, current_app, session
 
 import boto3
-from boto3.dynamodb.conditions import Key
+from boto3.dynamodb.conditions import Key, Attr
 from botocore.exceptions import BotoCoreError, ClientError
 from env_config import DYNAMODB_CHAT_TABLE
 
@@ -18,31 +18,39 @@ class ChatModel:
     def list_chat(self,index,limit=50,lastkey=None,sort='asc'):
         
         result = {}
+        all_items = []
 
         try:
-            # Build the query parameters with KeyConditionExpression
-            query_params = {
-                'TableName': DYNAMODB_CHAT_TABLE,
-                'KeyConditionExpression': Key('index').eq(index),
-                'Limit': limit,
-                "ScanIndexForward": True if sort == 'asc' else False
-            }
+            while True:
+                # Build the query parameters with KeyConditionExpression
+                query_params = {
+                    'TableName': DYNAMODB_CHAT_TABLE,
+                    'KeyConditionExpression': Key('index').eq(index),
+                    'Limit': limit,
+                    "ScanIndexForward": True if sort == 'asc' else False
+                }
 
-            # Add the ExclusiveStartKey to the query parameters if provided (for pagination)
-            if lastkey:
-                query_params['ExclusiveStartKey'] = lastkey
+                # Add the ExclusiveStartKey to the query parameters if provided (for pagination)
+                if lastkey:
+                    query_params['ExclusiveStartKey'] = lastkey
 
-            # Query DynamoDB to get items with matching PK and SK prefix
-            response = self.chat_table.query(**query_params)
-            
-            # Extract items and pagination key
-            items = response.get('Items', [])
-            endkey = response.get('LastEvaluatedKey')  # Pagination key for next query
+                # Query DynamoDB to get items with matching PK and SK prefix
+                response = self.chat_table.query(**query_params)
+                
+                # Extract items and pagination key
+                items = response.get('Items', [])
+                all_items.extend(items)  # Add current page items to the complete list
+                
+                # Get the pagination key for next query
+                lastkey = response.get('LastEvaluatedKey')
+                
+                # If there's no more pages, break the loop
+                if not lastkey:
+                    break
 
-            # Build the result
-            result ['success'] = True
-            result ['items'] = items
-            result ['lastkey'] = endkey  # This will be passed as 'lastkey' in the next call if needed
+            # Build the result with all items
+            result['success'] = True
+            result['items'] = all_items
             
             return result
 
@@ -54,6 +62,56 @@ class ChatModel:
             status = 400
             return result
         
+    
+    def get_chat(self, index, message_id):
+        
+        result = {}
+        
+        current_app.logger.debug(f'get_chat: {index} > {message_id}')
+        
+        try:
+            # Build the query parameters with KeyConditionExpression
+
+            
+            query_params = {
+                'TableName': DYNAMODB_CHAT_TABLE,
+                'KeyConditionExpression': Key('index').eq(index),
+                'FilterExpression': Attr('_id').eq(message_id)
+            }
+            
+
+
+            current_app.logger.debug(f'Query parameters: {query_params}')
+
+            # Query DynamoDB to get the specific item
+            response = self.chat_table.query(**query_params)
+            current_app.logger.debug(f'Raw DynamoDB response: {response}')
+            
+            # Extract items
+            items = response.get('Items', [])
+            current_app.logger.debug(f'Extracted items: {items}')
+            
+            if not items:
+                current_app.logger.debug(f'No items found for index: {index} and message_id: {message_id}')
+                result['success'] = False
+                result['message'] = 'Item not found'
+                return result
+            
+            print(f'CHM:get_chat > {items[0]}')
+            
+            # Build the result
+            result['success'] = True
+            result['item'] = items[0]  # Return single item
+            
+            return result
+
+        except Exception as e:
+            current_app.logger.error(f"Error in get_chat: {str(e)}")
+            result['success'] = False
+            result['message'] = 'Item could not be retrieved'
+            result['error'] = str(e)
+            return result
+        
         
         
     def create_chat(self,data):
@@ -62,7 +120,6 @@ class ChatModel:
 
         try:
             response = self.chat_table.put_item(Item=data)
-            print(f'create_chat > input:{response}')
             current_app.logger.debug('MODEL: Created chat successfully:'+str(data))
             return {
                 "success":True, 
@@ -80,10 +137,10 @@ class ChatModel:
                 }
         
         
-    # NOT USED
+        
     def update_chat(self,data):
 
-        
+
         try:
             response = self.chat_table.put_item(Item=data)
             current_app.logger.debug('MODEL: Updated entity successfully:'+str(data))

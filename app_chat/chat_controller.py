@@ -79,6 +79,14 @@ class ChatController:
         return response
     
     
+    def get_message(self, entity_type, entity_id, thread_id, message_id):
+        
+        index = f"irn:chat:{entity_type}/thread/message:{entity_id}/{thread_id}" 
+        print(f'get_message > {index} > {message_id}') 
+        response = self.CHM.get_chat(index,message_id) 
+        return response
+    
+    
     def create_message(self, entity_type, entity_id, thread_id, payload):
         print('CHC:create_message')
         try:
@@ -91,12 +99,17 @@ class ChatController:
             current_app.logger.debug(f'payload: {payload}')
             
             # Validate required payload fields
-            required_fields = ['context', 'input', 'output', 'message']
+            required_fields = ['context', 'input', 'message']
             if not all(field in payload for field in required_fields):
                 missing_fields = [field for field in required_fields if field not in payload]
                 raise ValueError(f"Missing required payload fields: {missing_fields}")
             
+
             print('All fields required: OK')
+            
+            output = []
+            if 'output' in payload and isinstance(payload['output'], list):
+                output = payload['output']
             
             data = {
                 'author_id': self.get_current_user(),
@@ -104,7 +117,7 @@ class ChatController:
                 'is_active': True,
                 'context': payload['context'],
                 'input': payload['input'],
-                'output': payload['output'],
+                'output': output,
                 'message': payload['message'],
                 'index': index,
                 '_id': str(uuid.uuid4())
@@ -113,19 +126,62 @@ class ChatController:
             current_app.logger.debug(f'Prepared data for chat creation: {data}')
             
             response = self.CHM.create_chat(data)
-            if not response:
-                raise ValueError("Failed to create chat message")
-            
-            current_app.logger.debug(f'create_message > output: {index}')
-            
             return response
             
-        except ValueError as ve:
-            current_app.logger.error(f"Validation error in create_message: {str(ve)}")
-            raise
         except Exception as e:
             current_app.logger.error(f"Error in create_message: {str(e)}")
-            raise
+            return {
+                "success": False,
+                "message": f"Error creating message: {str(e)}",
+                "status": 500
+            }
+        
+        
+    def update_message(self,entity_type, entity_id, thread_id, message_id, update):
+        print(f'CHC:update_message {entity_type}/{thread_id}/{message_id}:{update}')
+        try:
+        
+            data = self.get_message(entity_type, entity_id, thread_id, message_id)
+            
+            if not data['success']:
+                return data
+            
+            item = data['item']
+                
+            print(f'Document retrieved:{item}')
+            
+            
+            if 'output' not in item or not isinstance(item['output'], list):
+                item['output'] = []
+                
+            item['output'].append(update)
+            
+            current_app.logger.debug(f'Prepared data for chat update: {item}')
+            response = self.CHM.update_chat(item)
+            print(response)
+            return response
+        
+        except Exception as e:
+            current_app.logger.error(f"Error in update_message: {str(e)}")
+            return {
+                "success": False,
+                "message": f"Error updating message: {str(e)}",
+                "status": 500
+            }
+        
+        
+
+            
+        
+        
+        
+        
+        
+        
+        
+    
+        
+        
     
     
     
