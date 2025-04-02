@@ -160,15 +160,7 @@ While the symbolic link will be created, it will not work until you clone Tower 
 Installing Tower dependencies
 
 
-Copy .env.development.TEMPLATE to .env.development and .env.production.TEMPLATE to .env.development
-```
-cp .env.development.TEMPLATE .env.development
-cp .env.production.TEMPLATE .env.production
-```
-Replace the placeholder configurations with the real tokens and ids
-
-Install Dependencies
-
+Run npm to install dependencies
 ```
 npm install
 npm install vite
