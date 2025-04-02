@@ -50,6 +50,11 @@ git clone https://github.com/renglo/<tool_name>.git
 #### Step 6
 Installing Tank dependencies
 
+Go to the tank folder
+```
+cd ../tank
+```
+
 First, check if you have python3.12 installed
 
 ```
