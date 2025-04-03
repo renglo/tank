@@ -26,7 +26,7 @@ def create_iam_policy(env_name, cognito_user_pool_id, aws_region, aws_profile):
     # Generate a random 8-digit number for S3 bucket
     random_s3_number = generate_random_number()
     s3_bucket_arn = f"arn:aws:s3:::{env_name}-{random_s3_number}/*"
-    s3_bucket_name = f"{env_name}_{random_s3_number}"
+    s3_bucket_name = f"{env_name}-{random_s3_number}"
 
     # Define IAM Policy
     policy_document = {
@@ -104,8 +104,12 @@ def create_iam_policy(env_name, cognito_user_pool_id, aws_region, aws_profile):
             },
             {
                 "Effect": "Allow",
-                "Action": "execute-api:Invoke",
+                "Action": [
+                    "execute-api:Invoke",
+                    "execute-api:ManageConnections"
+                ],
                 "Resource": [
+                    f"arn:aws:execute-api:{aws_region}:{aws_account_id}:*/*/POST/@connections/*",
                     f"arn:aws:execute-api:{aws_region}:{aws_account_id}:*/stage/POST/_schd/ping"
                 ]
             }
