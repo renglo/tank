@@ -50,6 +50,11 @@ git clone https://github.com/renglo/<tool_name>.git
 #### Step 6
 Installing Tank dependencies
 
+Go to the tank folder
+```
+cd ../tank
+```
+
 First, check if you have python3.12 installed
 
 ```
@@ -155,11 +160,7 @@ While the symbolic link will be created, it will not work until you clone Tower 
 Installing Tower dependencies
 
 
-Rename .env.development.TEMPLATE to .env.development and .env.production.TEMPLATE to .env.development
-Replace the placeholder configurations with the real tokens and ids
-
-Install Dependencies
-
+Run npm to install dependencies
 ```
 npm install
 npm install vite
@@ -226,17 +227,34 @@ VITE v5.4.14  ready in 433 ms
 ➜  press h + enter to show help
   ```
 
-Add the logo
+Adding the logo and welcome images
+
 Create two images. 
+
 A small one (500x500 px, Max 100Kb, name: small_logo.jpg) for the Menu header and 
-A large one (2000x2000 px, Max 500kb, name: large_logo.jpg) for the log-in page
+
+A large one (1000x1000 px, Max 500kb, name: large_logo.jpg) for the log-in page
+
 Place both images in tower/public 
 
 ```
-cd tools
+cd tools/public
 ```
 
 The image names are listed in the .gitignore and in the .env.* files. For that reason you must use those names. 
+
+
+Set the Tools manifest
+
+Copy the contents of the tools template
+
+```
+cd tower/src
+cp tools.json.TEMPLATE tools.json
+```
+
+
+
 
 
 Build the FrontEnd
@@ -266,7 +284,6 @@ You need to install the libraries used by the tools in the /tools folder.
 ```
 cd tools
 npm install recharts
-npm install react-router-dom
 npm install lucide-react
 ```
 
