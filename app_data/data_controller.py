@@ -247,7 +247,9 @@ class DataController:
                 new_raw = payload.get(field['name'])
                 current_app.logger.debug('Using: '+str(field['name'])+':'+str(new_raw))        
             else:
-                current_app.logger.debug('Skipping: '+str(field['name']))
+                current_app.logger.debug('Inserting default value for field '+str(field['name'])+': '+str(field['default']))
+                # Instead of skipping we put the field's default value
+                item_values[field['name']] = field['default']
                 continue
 
             if field['type'] == 'object':
