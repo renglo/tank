@@ -211,28 +211,27 @@ class SchdController:
         # It makes sense that there is a blueprint for every RPC as it shows the inputs of the call. 
         # We could store every call to the RPC as a document. The ring itself is the name of the blueprint. 
         
-        blueprint = self.BPC.get_blueprint('irma',handler,'last')
+        if tool != '_action':
+            blueprint = self.BPC.get_blueprint('irma',handler,'last')
         
-        if 'fields' not in blueprint:
-            result.append({'success':False,'action':action,'handler':'','message':'No valid handler'}) 
-            return result, 400
-            
-        else:
-            handler_name = tool + '/' + handler
-
-            response = self.SHL.load_and_run(handler_name, payload = payload)
-            
-            print(f'Handler output:{response}')
-            
-            
-            if not response['success']:
-                result.append({'success':False,'action':action,'handler':handler_name,'input':payload,'output':response})
+            if 'fields' not in blueprint:
+                result.append({'success':False,'action':action,'handler':'','message':'No valid handler'}) 
                 return result, 400
             
-            result.append({'success':True,'action':action,'handler':handler_name,'input':payload,'output':response})
-          
 
-   
+        handler_name = tool + '/' + handler
+
+        response = self.SHL.load_and_run(handler_name, payload = payload)
+        
+        print(f'Handler output:{response}')
+        
+        
+        if not response['success']:
+            result.append({'success':False,'action':action,'handler':handler_name,'input':payload,'output':response})
+            return result, 400
+        
+        result.append({'success':True,'action':action,'handler':handler_name,'input':payload,'output':response})
+
         return result, 200
     
  

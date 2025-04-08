@@ -4,6 +4,7 @@ import os
 import sys
 import gc
 
+from app_schd.schd_actions import SchdActions
 
 class SchdLoader:
     
@@ -11,6 +12,8 @@ class SchdLoader:
         self.module_path = module_path
         #self.OPG = OperateGame()
         #self.modules = self.discover_modules()
+        self.SHK = SchdActions()
+        
         
         
     def convert_module_name_to_class(self,input_string):
@@ -81,7 +84,7 @@ class SchdLoader:
                     module_list.append(full_module_path)
         return module_list
 
-    def load_class(self,module_path, module_name, class_name, *args, **kwargs):
+    def load_code_class(self,module_path, module_name, class_name, *args, **kwargs):
         """Dynamically loads a class from a module and returns an instance with provided arguments."""
         modules = self.discover_modules(module_path)
         if module_name not in modules:
@@ -127,30 +130,43 @@ class SchdLoader:
         current_app.logger.info(f'Attempting to load class:{class_name}')
         
         module_parts = module_name.split("/")
+        payload = kwargs.get('payload')  # Extract payload from kwargs
         
-        instance = self.load_class(module_parts[0],module_parts[1], class_name, *args, **kwargs)
-        #instance = OperateGame()
-        
-        
+        # If module_parts[0] == '_actions', that means we are not dealing with a hard coded handler but with an AI driven handler. 
+        # It looks the same from the outside but it operates very different internally. 
+        # It iterates on a [context > goal > plan > execution] loop until it satisfies the goal. 
+
+        if module_parts[0] == '_action':
+            instance =  self.SHK
+            payload['action'] = module_parts[1] 
+            dynamic_class = False
+                    
+        else:
+            instance = self.load_code_class(module_parts[0],module_parts[1], class_name, *args, **kwargs)
+            dynamic_class = True
+  
         if not instance:
             error = f"Class '{class_name}' in '{module_name}' could not be loaded."
             return {'success':False,'action':action,'error':error,'output':error,'status':500}
         
         current_app.logger.info(f'Class Loaded:{class_name}')
         
-        if hasattr(instance, "run"):
-            payload = kwargs.get('payload')  # Extract payload from kwargs
+        if hasattr(instance, "run"):       
             result = instance.run(payload)  # Pass payload to run
         else:
             error = f"Class '{class_name}' in '{module_name}' has no 'run' method."
             current_app.logger.error(error)
             return {'success':False,'action':action,'error':error,'status':500}
 
-        # Unload module to free memory
-        del instance
-        if module_name in sys.modules:
-            del sys.modules[module_name]
-        gc.collect()
+
+        if dynamic_class:
+            # Unload module to free memory
+            del instance
+            if module_name in sys.modules:
+                del sys.modules[module_name]
+            gc.collect()
+            
+            
         
         if 'success' in result and not result['success']:
             
