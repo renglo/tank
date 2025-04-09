@@ -238,9 +238,71 @@ VERY IMPORTANT: The value of the CNRECORD should not be the GATEWAY URL but the 
 
 TROUBLESHOOT: If you find a blank screen, double check your tank and tower configuration files have the domain you just configured. 
 
+### Step 7: Setting up the WebSocket API
+
+Manual Process
+
+- Go to API Gateway in the AWS Console
+- Create  a new API  APIs > Create API > WebSocket API > Build
+
+Step 1 > API details
+API name: <api_name>  //This is the api name, it can be called anything
+Route selection expression: $request.body.action
+IP address type: IPv4
+
+Step 2 > Routes
+Route key: <route>
+
+Step 3 > Integrations
+Route key:  chat_message
+Integration type: HTTP
+Integration target: POST <integration_target>
+
+NOTE >> The “integration_target_base” is the URL of the stage in the REST api (which was automatically created by Zappa) on deployment. 
+
+integration_target = integration_target_base + "/_chat/message"
+
+Example: "https://abcdef1234.execute-api.us-east-1.amazonaws.com/something_prod_0305a/_chat/message"
+
+Step 4 > Stages
+Stage name: <environment>  (prod|dev)
+
+Once the API is saved. Click on the Rout called chat_message,  go to Integration Request tab and enter the following template
+
+```
+#set($inputRoot = $input.path('$'))
+{
+  "handler": "$inputRoot.handler",
+  "portfolio": "$inputRoot.portfolio",
+  "org": "$inputRoot.org",
+  "entity_type": "$inputRoot.entity_type",
+  "entity_id": "$inputRoot.entity_id",
+  "thread": "$inputRoot.thread",
+  "connectionId": "$context.connectionId"
+}
+```
+
+Enable two-way communication in the HTTP integration
 
 
-### Step 7: Setting up the Application Email (Optional)
+Automatic Process
+
+Go to /tank/installer and run
+
+```
+python create_websocket_api.py <api_name> "<integration_target>" "<endpoint>" <environment> --aws-profile <profile>
+```
+
+Example_Usage:
+python create_websocket_api.py x_prod_1234a_websocket "chat_message" "https://qwerty123.execute-api.us-east-1.amazonaws.com/x_prod_1234a/_chat/message" prod --aws-profile volatour
+
+Enable two-way communication in the HTTP integration (this needs to be done manually)
+
+
+
+
+
+### Step 8: Setting up the Application Email (Optional)
 
 - In order for the App to send emails to users (e.g.invitation emails) you need to create an identity in SES
 - An identity is the email that will show as the "from" in the email metadata. Usually it looks like no-reply@<your_domain>.com
