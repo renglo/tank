@@ -6,6 +6,7 @@ from flask_cognito import cognito_auth_required, current_user, current_cognito_j
 from app_chat.chat_controller import ChatController
 from app_schd.schd_controller import SchdController
 from functools import wraps
+import time
 
 app_chat = Blueprint('app_chat', __name__, url_prefix='/_chat')
 
@@ -138,10 +139,10 @@ def chat_threads(entity_type,entity_id):
 
 # Get/post messages from a thread
 # A conversation thread is a short lived and focused exchange of messages between an agent and a team, user or group of users.
-# SAMPLE URL https://<some_domain/_chat/<entity_type>/<entity_id>/<thread_id>
+# SAMPLE URL https://<some_domain/_chat/<entity_type>/<entity_id>/<thread_id>/<messages>
 # INPUT: entity_type, entity_id, thread_id
 # OUTPUT: A list of messages that belong to the conversation thread
-@app_chat.route('<string:entity_type>/<string:entity_id>/<string:thread_id>', methods=['GET','POST'])
+@app_chat.route('<string:entity_type>/<string:entity_id>/<string:thread_id>/messages', methods=['GET','POST'])
 @cognito_auth_required
 def chat_messages(entity_type,entity_id,thread_id):
     
@@ -151,6 +152,25 @@ def chat_messages(entity_type,entity_id,thread_id):
     elif request.method == 'POST':
         payload = request.get_json()
         response = CHC.create_message(entity_type,entity_id,thread_id,payload) 
+        
+        
+    return response
+
+
+# Get/post workspaces from a thread
+# A conversation thread is a short lived and focused exchange of messages around workspaces between an agent and a team, user or group of users.
+# SAMPLE URL https://<some_domain/_chat/<entity_type>/<entity_id>/<thread_id>
+# INPUT: entity_type, entity_id, thread_id
+# OUTPUT: A list of messages that belong to the conversation thread
+@app_chat.route('<string:entity_type>/<string:entity_id>/<string:thread_id>/workspaces', methods=['GET','POST'])
+@cognito_auth_required
+def chat_workspaces(entity_type,entity_id,thread_id):
+    
+    
+    if request.method == 'GET':
+        response = CHC.list_workspaces(entity_type,entity_id,thread_id)  
+    elif request.method == 'POST':
+        response = CHC.create_workspace(entity_type,entity_id,thread_id,{}) 
         
         
     return response

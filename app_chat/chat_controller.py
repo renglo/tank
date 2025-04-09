@@ -170,6 +170,125 @@ class ChatController:
             }
         
         
+        
+    # WORKSPACE
+    
+    def list_workspaces(self,entity_type,entity_id,thread_id):
+              
+        index = f"irn:chat:{entity_type}/thread/workspace:{entity_id}/{thread_id}"
+        limit = 50
+        sort = 'asc'
+        
+        response = self.CHM.list_chat(index,limit,sort=sort)
+        
+        return response
+    
+    
+    def get_workspace(self, entity_type, entity_id, thread_id, workspace_id):
+        
+        index = f"irn:chat:{entity_type}/thread/workspace:{entity_id}/{thread_id}" 
+        print(f'get_workspace > {index} > {workspace_id}') 
+        response = self.CHM.get_chat(index,workspace_id) 
+        return response
+    
+    
+    def create_workspace(self, entity_type, entity_id, thread_id, payload):
+        print('CHC:create_workspace')
+        try:
+            
+            if not all([entity_type, entity_id, thread_id]):
+                raise ValueError("Missing required parameters")
+
+            index = f"irn:chat:{entity_type}/thread/workspace:{entity_id}/{thread_id}"
+            
+            current_app.logger.debug(f'create_workspace > input > {index}')
+            current_app.logger.debug(f'payload: {payload}')
+            
+            # Validate required payload fields
+            '''required_fields = ['context']
+            if not all(field in payload for field in required_fields):
+                missing_fields = [field for field in required_fields if field not in payload]
+                raise ValueError(f"Missing required payload fields: {missing_fields}")'''
+            
+            context = {
+                'entity_type':entity_type,
+                'entity_id':entity_id,
+                'thread_id':thread_id
+            }
+            
+
+            print('All fields required: OK')
+            
+            data = []
+            if 'data' in payload and isinstance(payload['data'], list):
+                data = payload['data']
+                
+            config = {}
+            if 'config' in payload and isinstance(payload['config'], dict):
+                config = payload['config']
+                
+            type = 'json'
+            if 'type' in payload and isinstance(payload['config'], str):
+                type = payload['type']
+            
+            # CHANGE THIS TO FIT THE WORKSPACE SCHEMA
+            data = {
+                'author_id': self.get_current_user(),
+                'time': str(datetime.now().timestamp()),
+                'is_active': True,
+                'context': context,
+                'type': type,
+                'config' : config,
+                'data':data,
+                'index': index,
+                '_id': str(uuid.uuid4())
+            }
+            
+            current_app.logger.debug(f'Prepared data for chat creation: {data}')
+            
+            response = self.CHM.create_chat(data)
+            return response
+            
+        except Exception as e:
+            current_app.logger.error(f"Error in create_workspace: {str(e)}")
+            return {
+                "success": False,
+                "message": f"Error creating workspace: {str(e)}",
+                "status": 500
+            }
+        
+        
+    def update_workspace(self,entity_type, entity_id, thread_id, workspace_id, update):
+        print(f'CHC:update_workspace {entity_type}/{thread_id}/{workspace_id}:{update}')
+        try:
+        
+            data = self.get_message(entity_type, entity_id, thread_id, workspace_id)
+            
+            if not data['success']:
+                return data
+            
+            item = data['item']
+                
+            print(f'Document retrieved:{item}')
+            
+            
+            if 'output' not in item or not isinstance(item['output'], list):
+                item['output'] = []
+                
+            item['output'].append(update)
+            
+            current_app.logger.debug(f'Prepared data for chat update: {item}')
+            response = self.CHM.update_chat(item)
+            print(response)
+            return response
+        
+        except Exception as e:
+            current_app.logger.error(f"Error in update_workspace: {str(e)}")
+            return {
+                "success": False,
+                "message": f"Error updating workspace: {str(e)}",
+                "status": 500
+            }
 
             
         

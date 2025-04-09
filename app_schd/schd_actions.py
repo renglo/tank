@@ -331,7 +331,7 @@ class SchdActions:
         payload = {  
             'feedback_key': 'generate_commands', 
             'system_content': (
-                "You are an agent that creates RESTful queries \n"
+                "You are an agent that creates an output that will be executed \n"
             ),
             'user_content': f"{self.bridge['config']['prompt_4_execution']}",
             'input_template':f"{input_template}",
@@ -342,15 +342,15 @@ class SchdActions:
         response = self.run_prompt(payload)
         
         print(f'generate_commands > response > {response}')
-        self.bridge['commands'] = response['output']['commands']
-        self.print_rt(response['output']['commands'],'json')
+        self.bridge['commands'] = response['output']
+        self.print_rt(response['output'],'json')
         
         
         if 'success' not in response:
-            return {'success':False,'action':action,'input':input,'output':response}
+            return {'success':False,'action':action,'input':plan,'output':response}
         
         
-        return {'success':True,'action':action,'input':input,'output':response}
+        return {'success':True,'action':action,'input':plan,'output':response}
     
     
     
@@ -398,7 +398,7 @@ class SchdActions:
         
         
         #2. Iterate through the list of commands and execute each one at a time until done. 
-        executions = []
+        '''executions = []
         print('RESPONSE_1 >>>')
         print(response_1)
         for command in response_1['output']['output']['commands']:
@@ -406,10 +406,12 @@ class SchdActions:
             response_2 = self.run_command(command)
             if not response_2:
                 return {'success':False,'action':action,'input':command,'output':response_2}
-            executions.append(response_2)
+            executions.append(response_2)'''
+            
+        print(f'EXECUTE_PLAN >>{response_1}')
         
         
-        return {'success':True,'action':action,'input':plan,'output':executions}
+        return {'success':True,'action':action,'input':plan,'output':response_1}
             
 
     
