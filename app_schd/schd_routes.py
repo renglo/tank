@@ -198,10 +198,11 @@ def ping():
 @cognito_auth_required
 def direct_run(tool,handler):
     
-    current_app.logger.info('Executing Rule: '+tool+'/'+handler)
+    current_app.logger.info('Running: '+tool+'/'+handler)
+    handler_route = tool+'/'+handler
     
     payload = request.get_json() 
-    response, status = SHC.direct_run(tool,handler,payload)
+    response, status = SHC.direct_run(handler_route,payload)
     
     return jsonify(response), status
 

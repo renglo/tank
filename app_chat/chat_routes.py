@@ -67,23 +67,20 @@ def real_time_message():
         current_app.logger.info(payload)
         
         # Validate required fields
-        required_fields = ['handler', 'action', 'auth', 'data']
+        required_fields = ['action', 'auth', 'data']
         missing_fields = [field for field in required_fields if field not in payload]
         if missing_fields:
             current_app.logger.error(f"Missing required fields: {missing_fields}")
             return jsonify({'error': f'Missing required fields: {missing_fields}'}), 400
         
-        # Call handler
-        handler = payload['handler']
-        try:
-            tool, handler_name = handler.split('/')
-        except ValueError:
-            current_app.logger.error(f"Invalid handler format: {handler}")
-            return jsonify({'error': 'Invalid handler format. Expected format: tool/handler_name'}), 400
-            
-        response = SHC.direct_run(tool, handler_name, payload)
+        response = CHC.chat_triage(payload)
         
         # Handle the case where response is a tuple (response, status)
+        
+        # IT REALLY DOESN'T MATTER WHAT DO WE RESPOND AS IT GOES TO THE API GATEWAY AND GETS LOST THERE
+        # The real output happens through the WebSocket. Actions stream their activity back to the chat via the active WebSocket. 
+        # The only moment when it matters is when the connection is closed. 
+        
         if isinstance(response, tuple):
             response_data, status_code = response
         else:

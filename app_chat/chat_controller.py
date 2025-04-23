@@ -216,6 +216,14 @@ class ChatController:
                 'thread_id':thread_id
             }
             
+            state = {
+                "beliefs": {},
+                "goals": [],            # prioritized list of pending goals
+                "intentions": [],       # current committed plans 
+                "history": [],          # log of completed intentions
+                "in_progress": None     # the current active plan (intention)
+            }
+            
 
             print('All fields required: OK')
             
@@ -237,6 +245,7 @@ class ChatController:
                 'time': str(datetime.now().timestamp()),
                 'is_active': True,
                 'context': context,
+                'state': state,
                 'type': type,
                 'config' : config,
                 'data':data,
@@ -258,37 +267,61 @@ class ChatController:
             }
         
         
-    def update_workspace(self,entity_type, entity_id, thread_id, workspace_id, update):
-        print(f'CHC:update_workspace {entity_type}/{thread_id}/{workspace_id}:{update}')
+    def update_workspace(self,entity_type, entity_id, thread_id, workspace_id, payload):
+        print(f'CHC:update_workspace {entity_type}/{thread_id}/{workspace_id}:{payload}')
+        
         try:
         
-            data = self.get_message(entity_type, entity_id, thread_id, workspace_id)
+            data = self.get_workspace(entity_type, entity_id, thread_id, workspace_id)
+            
+            print('Updating the obtained workspace document...')
             
             if not data['success']:
                 return data
             
             item = data['item']
+            changed = False
+            
+            if 'state' in payload:
+                item['state'] = payload['state']
+                changed = True
                 
-            print(f'Document retrieved:{item}')
-            
-            
-            if 'output' not in item or not isinstance(item['output'], list):
-                item['output'] = []
+            if 'data' in item:
+                item['data'] = payload['data']
+                changed = True
                 
-            item['output'].append(update)
-            
-            current_app.logger.debug(f'Prepared data for chat update: {item}')
-            response = self.CHM.update_chat(item)
-            print(response)
-            return response
+            if changed:
+                current_app.logger.debug(f'Prepared data for workspace update: {item}')
+                response = self.CHM.update_chat(item)
+                print(response)
+                return response
         
         except Exception as e:
             current_app.logger.error(f"Error in update_workspace: {str(e)}")
             return {
                 "success": False,
-                "message": f"Error updating workspace: {str(e)}",
+                "message": f"Error updating message: {str(e)}",
                 "status": 500
             }
+                
+            
+    
+    # TRIAGE
+    
+    def chat_triage(self,payload):
+        
+        #LOGIC TO DECIDE WHAT HANDLER TO USE GOES HERE
+        
+        #1. Get a list of all the available actions
+        #2. Compare the message with utterances from the actions in the list
+        #3. If you find a match, declare that action as the active action
+        
+        handler = 'x'
+    
+        # Call handler   
+        response = SHC.direct_run(handler, payload) # REPLACE THIS FOR THE TRIAGE. THE TRIAGE WILL USE SHC.direct_run once it determines what handler to use
+        
+                
 
             
         

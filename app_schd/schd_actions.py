@@ -37,7 +37,7 @@ class SchdActions:
         self.DAC = DataController()
         self.DCC = DocsController()
         self.CHC = ChatController()
-        #self.SHL = SchdLoader()
+        #self.SHL = SchdLoader() # If schd_actions was loaded by schd_loader, this will cause a circular dependency > ERROR
               
         
         self.AI_1 = openai_client
@@ -52,7 +52,7 @@ class SchdActions:
         
     
         
-    def print_rt(self,output,type):
+    def print_chat(self,output,type):
         
         if not self.bridge['conn']:
             return False
@@ -68,6 +68,111 @@ class SchdActions:
             )
             # DataBase
             self.update_chat_message_document(doc)
+            
+            return True
+        
+        except self.apigw_client.exceptions.GoneException:
+            print(f'Connection is no longer available')
+            self.bridge['conn'] = ''  # Clear the connection ID
+            return False
+        except Exception as e:
+            print(f'Error sending message: {str(e)}')
+            return False
+                
+                
+                
+    def mutate_workspace(self,output,key):
+        
+        if not self.bridge['thread']:
+            return False
+        
+
+        print("MUTATE_WORKSPACE>>",key,output)
+       
+        #1. Get the workspace in this thread
+        workspaces_list = self.CHC.list_workspaces(self.bridge['entity_type'],self.bridge['entity_id'],self.bridge['thread']) 
+        print('WORKSPACES_LIST >>',workspaces_list) 
+        
+        if not workspaces_list['success']:
+            return False
+        
+        if len(workspaces_list['items'])==0:
+            #Create a workspace as none exist
+            response = self.CHC.create_workspace(self.bridge['entity_type'],self.bridge['entity_id'],self.bridge['thread'],{}) 
+            if not response['success']:
+                return False
+            # Regenerate workspaces_list
+            workspaces_list = self.CHC.list_workspaces(self.bridge['entity_type'],self.bridge['entity_id'],self.bridge['thread']) 
+
+            print('WORKSPACES_LIST >>>>',workspaces_list) 
+            
+            
+        if not self.bridge.get('workspace'):
+            workspace = workspaces_list['items'][-1]
+        else:
+            for w in workspaces_list['items']:
+                if w['_id'] == self.bridge['workspace']:
+                    workspace = w
+                    
+        print('Selected workspace >>>>',workspace) 
+        if 'state' not in workspace:
+            workspace['state'] = {
+                "beliefs": {},
+                "goals": [],           
+                "intentions": [],       
+                "history": [],          
+                "in_progress": None    
+            }
+            
+        #2. Store the output in the workspace
+        if key == 'belief':
+            # output = {"date":"345"}
+            if isinstance(output, dict):
+                workspace['state']['beliefs'] = {**workspace['state']['beliefs'], **output} #Creates a new dictionary that combines both dictionaries
+        
+        if key == 'goals':
+            if isinstance(output, dict):
+                workspace['state']['goals'].insert(0, output) # The inserted object goes to the first position (this will work as a stack)
+                
+        if key == 'intentions':
+            if isinstance(output, dict):
+                workspace['state']['intentions'].insert(0, output) # The inserted object goes to the first position (this will work as a stack)
+                
+        if key == 'history':
+            if isinstance(output, dict):
+                workspace['state']['history'].append(output) # The inserted object goes to the last position
+                          
+        if key == 'data':
+            if isinstance(output, dict):
+                workspace['data'].append(output) # The inserted object goes to the last position            
+        
+        if key == 'data_ovr':
+            if isinstance(output, list):
+                workspace['data'] = output # Output overrides existing data
+                
+        if key == 'is_active':
+            if isinstance(output, bool):
+                workspace['data'] = output # Output overrides existing data
+                
+                    
+        #3. Broadcast updated workspace
+        
+        # WebSocket
+            self.apigw_client.post_to_connection(
+                ConnectionId=self.bridge['conn'],
+                Data=json.dumps(doc)
+            )
+         
+        
+        try:
+            print(f'Sending Real Time Message to:{self.bridge['conn']}')
+            doc = {'_out':workspace,'_type':'json'}
+            
+            self.print_chat('Updating the workspace document...','text')
+            self.print_chat(doc,'json')
+            
+            # Update document
+            self.update_workspace_document(workspace,workspace['_id'])
             
             return True
         
@@ -170,7 +275,7 @@ class SchdActions:
         print(f'Running: {action}')
         
         
-        self.print_rt('Trying to understand the context of the message...','text')
+        self.print_chat('Trying to understand the context of the message...','text')
         
         input_template = '<raw message string>'
         output_template = {
@@ -181,7 +286,8 @@ class SchdActions:
             }
         
         
-        payload = {   
+        payload = {  
+            'system_wide_prompt': system_prompt, 
             'feedback_key': 'perception_and_interpretation',
             'system_content': (
                 "You are an agent in charge of receiving and relaying messages while detecting its language and sentiment.\n"
@@ -195,7 +301,8 @@ class SchdActions:
         
         response = self.run_prompt(payload)
         self.bridge['interpretation'] = response['output']
-        self.print_rt(response['output'],'json')
+        self.print_chat(response['output'],'json')
+        self.mutate_workspace(response['output'],'belief')
         
         
         
@@ -211,7 +318,7 @@ class SchdActions:
         action = 'process_information'
         print(f'Running: {action}')
         
-        self.print_rt('Setting up a goal...','text')
+        self.print_chat('Setting up a goal...','text')
         
         input_template = {
             "type": "text",
@@ -239,7 +346,8 @@ class SchdActions:
         
         response = self.run_prompt(payload)
         self.bridge['information'] = response['output']
-        self.print_rt(response['output'],'json')
+        self.print_chat(response['output'],'json')
+        self.mutate_workspace(response['output'],'goals')
         
         if 'success' not in response:
             return {'success':False,'action':action,'input':input,'output':response}
@@ -252,7 +360,7 @@ class SchdActions:
         action = 'reasoning_and_planning'
         print(f'Running: {action}')
         
-        self.print_rt('Creating a plan of action...','text')
+        self.print_chat('Creating a plan of action...','text')
         
         input_template = {
             'goal':"<goal>",
@@ -289,7 +397,8 @@ class SchdActions:
         
         response = self.run_prompt(payload)
         self.bridge['plan'] = response['output']
-        self.print_rt(response['output'],'json')
+        self.print_chat(response['output'],'json')
+        self.mutate_workspace(response['output'],'intentions')
         
         
         if 'success' not in response:
@@ -305,7 +414,7 @@ class SchdActions:
         action = 'generate_commands'
         print(f'Running: {action}')
         
-        self.print_rt('Generating the commands to make it happen...','text')
+        self.print_chat('Generating the commands to make it happen...','text')
         
         input_template = [
             {
@@ -326,7 +435,7 @@ class SchdActions:
             [
                 "<COMMAND STRING>"
             ]
-        } 
+        }
         
         payload = {  
             'feedback_key': 'generate_commands', 
@@ -343,7 +452,7 @@ class SchdActions:
         
         print(f'generate_commands > response > {response}')
         self.bridge['commands'] = response['output']
-        self.print_rt(response['output'],'json')
+        self.print_chat(response['output'],'json')
         
         
         if 'success' not in response:
@@ -362,7 +471,7 @@ class SchdActions:
         
         print('Running the following command:')
         print(command)
-        self.print_rt(f'running: {command}','command')
+        self.print_chat(f'running: {command}','command')
         
         return {'success':True,'action':action,'input':command,'output':'mock-executed'}
         
@@ -389,7 +498,7 @@ class SchdActions:
         print(f'Running: {action}')
         
 
-        self.print_rt('Executing plan...','text')
+        self.print_chat('Executing plan...','text')
          
         #1. Call function that generates the RESTFUL commands
         response_1 = self.generate_commands(plan)  
@@ -419,7 +528,7 @@ class SchdActions:
         
         action = 'new_chat_message_document'
         print(f'Running: {action}')  
-        #self.print_rt('Creating new chat document...','text')
+        #self.print_chat('Creating new chat document...','text')
         
         context = {}
         context['portfolio'] = self.bridge['portfolio']
@@ -449,13 +558,34 @@ class SchdActions:
         
         action = 'update_chat_message_document'
         print(f'Running: {action}')
-        #self.print_rt('Updating chat document...','text')
+        #self.print_chat('Updating chat document...','text')
         
         response = self.CHC.update_message(
                         self.bridge['entity_type'],
                         self.bridge['entity_id'],
                         self.bridge['thread'],
                         self.bridge['chat_id'],
+                        update
+                    )
+        
+        if 'success' not in response:
+            return {'success':False,'action':action,'input':update,'output':response}
+        
+        return {'success':True,'action':action,'input':update,'output':response}
+    
+    
+    
+    def update_workspace_document(self,update,workspace_id):
+        
+        action = 'update_workspace_document'
+        print(f'Running: {action}')
+        #self.print_chat('Updating chat document...','text')
+        
+        response = self.CHC.update_workspace(
+                        self.bridge['entity_type'],
+                        self.bridge['entity_id'],
+                        self.bridge['thread'],
+                        workspace_id,
                         update
                     )
         
@@ -470,7 +600,7 @@ class SchdActions:
         
         action = 'new_chat_workspace_document'
         print(f'Running: {action}')  
-        #self.print_rt('Creating new chat document...','text')
+        #self.print_chat('Creating new chat document...','text')
         
         context = {}
         context['portfolio'] = self.bridge['portfolio']
@@ -555,6 +685,8 @@ class SchdActions:
             self.bridge['entity_id'] = payload['entity_id']
         if 'thread' in payload:
             self.bridge['thread'] = payload['thread']
+        if 'workspace' in payload:
+            self.bridge['workspace'] = payload['workspace']
             
         
         
@@ -578,15 +710,91 @@ class SchdActions:
         if not response_1['success']: return {'success':False,'action':action,'output':results}
         
         
+        '''
+        response_1["output"] = {
+        "language": "English",
+        "message": "I need a reservation in your stupid restaurant",
+        "next": {
+            "action": "send_chat_message",
+            "parameters": {
+                "message": "We do not tolerate harassment in this chat"
+            },
+            "type": "break"
+        },
+        '''
+        
+        print('RESPONSE 1:',response_1)
+        
+        
+        if 'next' in response_1['output']['output']:
+            if 'action' in response_1['output']['output']['next']:
+                if response_1['output']['output']['next']['action'] == 'send_chat_message':
+                    self.print_chat(response_1['output']['output']['next']['parameters']['message'],'text')
+                    print('NEXT/ACTION >>> Perception and Interpretation')
+                    print(response_1['output']['output']['next']['parameters']['message'])
+                    
+        
+        if 'next' in response_1['output']['output']:
+            if 'break' in response_1['output']['output']['next']:
+                if response_1['output']['output']['next']['break']:
+                    print('NEXT/TYPE >>> Perception and Interpretation')
+                    print(response_1['output']['output']['next']['break'])
+                    return {'success':True,'action':action,'output':results}
+                    
+                
+                    
+        
+        
         # Step 2: Process Information
         response_2 = self.process_information(self.bridge['interpretation'])
         results.append(response_2)
         if not response_2['success']: return {'success':False,'action':action,'output':results}
         
         
-        '''# Early finish, Request rejected
-        if response_2['output']['goal'] == 'reject_booking':
-            return {'success':True,'message':'Booking rejected','action':action,'output':results}'''
+        print('RESPONSE 2:',response_2)
+        
+        
+        if 'next' in response_2['output']['output']:
+            if 'action' in response_2['output']['output']['next']:
+                if response_2['output']['output']['next']['action'] == 'send_chat_message':
+                    self.print_chat(response_2['output']['output']['next']['parameters']['message'],'text')
+                    print('NEXT/ACTION >>> Perception and Interpretation')
+                    print(response_2['output']['output']['next']['parameters']['message'])
+                    
+        
+        if 'next' in response_2['output']['output']:
+            if 'break' in response_2['output']['output']['next']:
+                if response_2['output']['output']['next']['break']:
+                    print('NEXT/TYPE >>> Perception and Interpretation')
+                    print(response_2['output']['output']['next']['break'])
+                    return {'success':True,'action':action,'output':results}
+                
+                
+        '''
+        
+        
+        {
+        "date": "2025-04-11",
+        "goal": "book-table",
+        "guest_qty": "5",
+        "next": {
+            "action": "send_chat_message",
+            "break": false,
+            "parameters": {
+            "message": "Your request is clear"
+            }
+        },
+        "time": "17:00"
+        }
+        
+        
+        
+        
+        '''
+        
+        
+        
+        
         
         
         
@@ -595,6 +803,37 @@ class SchdActions:
         response_3 = self.reasoning_and_planning(self.bridge['information'])
         results.append(response_3)
         if not response_3['success']: return {'success':False,'action':action,'output':results}
+        
+        
+        
+        '''
+        {
+        "plan": [
+            {
+            "parameters": {
+                "date": "2025-04-11",
+                "guest_qty": "5",
+                "time": "17:00"
+            },
+            "tool": "search_table_availability"
+            },
+            {
+            "parameters": {
+                "date": "2025-04-11",
+                "guest_qty": "5",
+                "time": "17:00"
+            },
+            "tool": "book_table"
+            },
+            {
+            "parameters": {
+                "param": "Your request is clear"
+            },
+            "tool": "send_whatsapp_message"
+            }
+        ]
+        }
+        '''
         
         
         
@@ -627,7 +866,7 @@ class SchdActions:
         '''
     
 
-        self.print_rt('Cycle completed','text')
+        self.print_chat('Cycle completed','text')
         self.bridge['conn'] = ''
             
                   
