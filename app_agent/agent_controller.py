@@ -1,12 +1,12 @@
-from app_schd.schd_actions import SchdActions
-#from app_schd.schd_controller import SchdController
+from app_agent.agent_actions import AgentActions
+
 
 class AgentController:
 
     def __init__(self,tid=None,ip=None):
 
-        #self.SHC = SchdController()
-        self.SHK = SchdActions()
+        
+        self.AGA = AgentActions()
         
         
 
@@ -26,7 +26,7 @@ class AgentController:
         response = self.SHC.direct_run(handler, payload) # REPLACE THIS FOR THE TRIAGE. THE TRIAGE WILL USE SHC.direct_run once it determines what handler to use
         '''
         
-        result = self.SHK.run(payload) 
+        result = self.AGA.run(payload) 
         
         if 'success' in result and not result['success']:
             
