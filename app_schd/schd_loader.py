@@ -5,7 +5,6 @@ import sys
 import gc
 
 from app_schd.schd_actions import SchdActions
-from app_schd.schd_triage import SchdTriage
 
 class SchdLoader:
     
@@ -14,7 +13,7 @@ class SchdLoader:
         #self.OPG = OperateGame()
         #self.modules = self.discover_modules()
         self.SHK = SchdActions()
-        self.SHT = SchdTriage()
+        
         
         
         
@@ -134,23 +133,8 @@ class SchdLoader:
         module_parts = module_name.split("/")
         payload = kwargs.get('payload')  # Extract payload from kwargs
         
-        # If module_parts[0] == '_actions', that means we are not dealing with a hard coded handler but with an AI driven handler. 
-        # It looks the same from the outside but it operates very different internally. 
-        # It iterates on a [context > goal > plan > execution] loop until it satisfies the goal. 
-
-        if module_parts[0] == '_action':
-            instance =  self.SHK
-            payload['action'] = module_parts[1] 
-            runtime_loaded_class = False
-            
-        elif module_parts[0] == '_sys' and module_parts[1] == 'chat':
-            instance =  self.SHT
-            payload['action'] = module_parts[1] 
-            runtime_loaded_class = False
-                    
-        else:
-            instance = self.load_code_class(module_parts[0],module_parts[1], class_name, *args, **kwargs)
-            runtime_loaded_class = True
+        instance = self.load_code_class(module_parts[0],module_parts[1], class_name, *args, **kwargs)
+        runtime_loaded_class = True
   
         if not instance:
             error = f"Class '{class_name}' in '{module_name}' could not be loaded."

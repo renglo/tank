@@ -4,15 +4,16 @@ from flask import Blueprint,request,redirect,url_for, jsonify, current_app, sess
 from app_auth.login_required import login_required
 from flask_cognito import cognito_auth_required, current_user, current_cognito_jwt
 from app_chat.chat_controller import ChatController
-from app_schd.schd_controller import SchdController
+from app_agent.agent_controller import AgentController
+from app_schd.schd_actions import SchdActions
 from functools import wraps
 import time
 
 app_chat = Blueprint('app_chat', __name__, url_prefix='/_chat')
 
-
 CHC = ChatController()
-SHC = SchdController()
+AGC = AgentController()
+SHK = SchdActions()
 
 
 def socket_auth_required(f):
@@ -73,7 +74,7 @@ def real_time_message():
             current_app.logger.error(f"Missing required fields: {missing_fields}")
             return jsonify({'error': f'Missing required fields: {missing_fields}'}), 400
         
-        response = CHC.chat_triage(payload)
+        response = AGC.triage(payload)
         
         # Handle the case where response is a tuple (response, status)
         
@@ -96,7 +97,7 @@ def real_time_message():
             
     except Exception as e:
         current_app.logger.error(f"Error processing message: {str(e)}")
-        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+        return jsonify({'error': 'Internal server error (654)', 'details': str(e)}), 500
     
 
 
@@ -170,6 +171,16 @@ def chat_workspaces(entity_type,entity_id,thread_id):
         response = CHC.create_workspace(entity_type,entity_id,thread_id,{}) 
         
         
+    return response
+
+
+
+# TROUBLESHOOT (Please comment out)
+@app_chat.route('/tb', methods=['POST'])
+@cognito_auth_required
+def chat_tb():
+    payload = request.get_json()
+    response = SHK.run(payload) 
     return response
 
 

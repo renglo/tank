@@ -6,6 +6,8 @@ from datetime import datetime
 from common import *
 import uuid
 
+
+
 class ChatController:
 
     def __init__(self,tid=None,ip=None):
@@ -306,22 +308,7 @@ class ChatController:
                 
             
     
-    # TRIAGE
     
-    def chat_triage(self,payload):
-        
-        #LOGIC TO DECIDE WHAT HANDLER TO USE GOES HERE
-        
-        #1. Get a list of all the available actions
-        #2. Compare the message with utterances from the actions in the list
-        #3. If you find a match, declare that action as the active action
-        
-        handler = 'x'
-    
-        # Call handler   
-        response = SHC.direct_run(handler, payload) # REPLACE THIS FOR THE TRIAGE. THE TRIAGE WILL USE SHC.direct_run once it determines what handler to use
-        
-                
 
             
         
