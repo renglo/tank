@@ -56,21 +56,24 @@ class AgentActions:
         
     def print_chat(self,output,type):
         
+        
+        # DataBase
+        doc = {'_out':output,'_type':type}
+        self.update_chat_message_document(doc)
+        
         if not self.bridge['conn']:
             return False
              
         try:
+            
             print(f'Sending Real Time Message to:{self.bridge['conn']}')
-            doc = {'_out':output,'_type':type}
             
             # WebSocket
             self.apigw_client.post_to_connection(
                 ConnectionId=self.bridge['conn'],
                 Data=json.dumps(doc)
             )
-            # DataBase
-            self.update_chat_message_document(doc)
-            
+               
             print(f'Message has been updated')
             
             return True
@@ -85,13 +88,13 @@ class AgentActions:
                 
                 
                 
-    def mutate_workspace(self,output,key):
-        
+    def mutate_workspace(self,changes):
+
         if not self.bridge['thread']:
             return False
         
 
-        print("MUTATE_WORKSPACE>>",key,output)
+        print("MUTATE_WORKSPACE>>",changes)
        
         #1. Get the workspace in this thread
         workspaces_list = self.CHC.list_workspaces(self.bridge['entity_type'],self.bridge['entity_id'],self.bridge['thread']) 
@@ -129,64 +132,79 @@ class AgentActions:
             }
             
         #2. Store the output in the workspace
-        if key == 'belief':
-            # output = {"date":"345"}
-            if isinstance(output, dict):
-                #workspace['state']['beliefs'] = {**workspace['state']['beliefs'], **output} #Creates a new dictionary that combines both dictionaries
-                workspace['state']['beliefs'] = output
         
-        if key == 'desire':
-            if isinstance(output, str):
-                #workspace['state']['desires'].insert(0, output) # The inserted object goes to the first position (this will work as a stack)
-                workspace['state']['desire'] = output
-                
-        if key == 'intent':
-            if isinstance(output, list):
-                workspace['state']['intent'] = output 
-                
-        if key == 'belief_history':
-            if isinstance(output, dict):
-                # Now update the belief history
-                for k, v in output.items():
-                    history_event = {
-                        'type':'belief',
-                        'key': k,
-                        'val': v,
-                        'time': datetime.now().isoformat()
-                    }
-                    workspace['state']['history'].append(history_event)
-                    # The inserted object goes to the last position
-                          
-        if key == 'data':
-            if isinstance(output, dict):
-                workspace['data'].append(output) # The inserted object goes to the last position            
-        
-        if key == 'data_ovr':
-            if isinstance(output, list):
-                workspace['data'] = output # Output overrides existing data
-                
-        if key == 'is_active':
-            if isinstance(output, bool):
-                workspace['data'] = output # Output overrides existing data
-                
+        for key,output in changes.items():
+            
+            if key == 'belief':
+                # output = {"date":"345"}
+                if isinstance(output, dict):
+                    #workspace['state']['beliefs'] = {**workspace['state']['beliefs'], **output} #Creates a new dictionary that combines both dictionaries
+                    workspace['state']['beliefs'] = output
+            
+            if key == 'desire':
+                if isinstance(output, str):
+                    #workspace['state']['desires'].insert(0, output) # The inserted object goes to the first position (this will work as a stack)
+                    workspace['state']['desire'] = output
                     
+            if key == 'intent':
+                if isinstance(output, list):
+                    workspace['state']['intent'] = output 
+                    
+            if key == 'belief_history':
+                if isinstance(output, dict):
+                    # Now update the belief history
+                    for k, v in output.items():
+                        history_event = {
+                            'type':'belief',
+                            'key': k,
+                            'val': v,
+                            'time': datetime.now().isoformat()
+                        }
+                        workspace['state']['history'].append(history_event)
+                        # The inserted object goes to the last position
+                            
+            if key == 'data':
+                if isinstance(output, dict):
+                    workspace['data'].append(output) # The inserted object goes to the last position            
+            
+            if key == 'data_ovr':
+                if isinstance(output, list):
+                    workspace['data'] = output # Output overrides existing data
+                    
+            if key == 'is_active':
+                if isinstance(output, bool):
+                    workspace['data'] = output # Output overrides existing data
+                    
+            if key == 'action':
+                if isinstance(output, str):
+                    workspace['state']['action'] = output # Output overrides existing data
+                    
+            if key == 'follow_up':
+                if isinstance(output, dict):
+                    workspace['state']['follow_up'] = output # Output overrides existing data
+                    
+            if key == 'slots':
+                if isinstance(output, dict):
+                    workspace['state']['slots'] = output # Output overrides existing data
+                        
         #3. Broadcast updated workspace
         
-        # WebSocket
+        '''
+            # WebSocket
             self.apigw_client.post_to_connection(
                 ConnectionId=self.bridge['conn'],
                 Data=json.dumps(doc)
             )
+        '''
          
         
         try:
             print(f'Sending Real Time Message to:{self.bridge['conn']}')
-            doc = {'_out':workspace,'_type':'json'}
-            
-            self.print_chat('Updating the workspace document...','text')
+            #doc = {'_out':workspace,'_type':'json'}
             #self.print_chat(doc,'json')
             
-            # Update document
+            #self.print_chat('Updating the workspace document...','text')
+            # Update document in DB
             self.update_workspace_document(workspace,workspace['_id'])
             
             return True
@@ -200,13 +218,15 @@ class AgentActions:
             return False
         
         
+         
+        
     def sanitize(self,obj):
         if isinstance(obj, list):
             return [self.sanitize(x) for x in obj]
         elif isinstance(obj, dict):
             return {k: self.sanitize(v) for k, v in obj.items()}
-        elif isinstance(obj, decimal.Decimal):
-            return float(obj)
+        elif isinstance(obj, (int, float, decimal.Decimal)):
+            return str(obj)
         else:
             return obj
                     
@@ -310,10 +330,12 @@ class AgentActions:
     
     
     # 1
-    def perception_and_interpretation(self, message):
+    def perception_and_interpretation(self, message,last_belief):
         
         action = 'perception_and_interpretation'
         self.print_chat('Interpreting message and extracting information from it...','text')
+        
+        
         
         prompt = f"""
             You are a perception module for an intelligent agent. Your job is to interpret raw user input and extract structured information from it.
@@ -330,8 +352,11 @@ class AgentActions:
                 - "knowledge_base": for looking up user preferences
                 - "geolocation": for inferring location from IP
 
+            Use the existing belief object as a reference. If there is a similar key in the belief for a piece of information, use it in the intent object
             Do not perform reasoning or fill in missing values. Just extract what is directly mentioned.
             Make sure to return valid JSON with all strings properly quoted.
+            
+            Current belief object: '{last_belief}' 
 
             User message: '{message}'
         """
@@ -341,7 +366,8 @@ class AgentActions:
             result = json.loads(response)
         except json.JSONDecodeError as e:
             print(f"Error parsing LLM response: {e}")
-            print(f"Raw response: {response}")
+            print(f"perception_and_interpretation > Prompt: {prompt}")
+            print(f"Perception_and_interpretation > Raw response: {response}")
             # Return a basic structure if parsing fails
             default_result = {
                 "intent": "unknown",
@@ -392,9 +418,12 @@ class AgentActions:
     # 2
     def process_information(self, input):
         
-        action = 'process_information'     
+        action = 'process_information'   
+        print(f'Running:{action}')  
         self.print_chat('Enriching and normalizing the beliefs...','text')
           
+        # Get current time and date
+        current_time = datetime.now().strftime("%Y-%m-%d")
         prompt = f"""
             You are an internal reasoning module for a BDI agent. Your input is a parsed perception output from a user's message.
 
@@ -412,7 +441,7 @@ class AgentActions:
                - Intent of this iteration
                - beliefs inside of a belief attribute
 
-            Today's date is 2025-04-19.
+            Today's date is {current_time}.
 
             Example input:
             {{
@@ -470,7 +499,7 @@ class AgentActions:
             
             self.print_chat(parsed_response,'json')
             self.print_chat('Now, I will update the beliefs in the workspace','text')
-            self.mutate_workspace(parsed_response['beliefs']['entities'],'belief_history')
+            self.mutate_workspace({'belief_history':parsed_response['beliefs']['entities']})
         
             return {'success':True,'action':action,'input':input,'output':parsed_response}
             
@@ -486,55 +515,420 @@ class AgentActions:
     
 
     
-    def detect_desire(self, belief_history):
-        cleaned_belief_history = self.sanitize(belief_history)
+    def detect_desire(self, belief):
+        
+        action = 'detect_desire'
+        print(f'Running:{action}')
+        
+        
         prompt = f"""
         You are a desire detection module inside a BDI agent.
 
-        You are given a belief history — a list of key-value updates representing user-provided information over time.
+        You are given a belief object — a list of key-value updates representing user-provided information.
 
-        Analyze the belief history and summarize the user's **desire** (their goal or objective) in a short natural language sentence.
+        Analyze the belief object and summarize the user's **desire** (their goal or objective) in a short natural language sentence.
 
-        ### Belief History:
-        {json.dumps(cleaned_belief_history, indent=2)}
+        ### Belief:
+        {json.dumps(belief, indent=2)}
 
         Return only the user's desire.
         """
         return self.llm(prompt).strip()
-
-
-
-    def extract_facts(self, desire, belief_history):
+    
+    
+    def prune_history(self, history):
+        """
+        Prunes the history list to keep only the most recent value for each key while maintaining chronological order.
+        Objects at the bottom of the list are newer.
+        
+        Args:
+            history (list): List of belief objects with key, val, time, and type fields
+            
+        Returns:
+            list: Pruned history list with only the most recent value for each key
+        """
+        # Create a dictionary to track the most recent value for each key
+        latest_values = {}
+        
+        # First pass: identify the most recent value for each key
+        for item in history:
+            key = item['key']
+            latest_values[key] = item
+        
+        # Second pass: create new list maintaining original order but only including latest values
+        pruned_history = []
+        seen_keys = set()
+        
+        # Iterate through history in reverse to maintain chronological order
+        for item in reversed(history):
+            key = item['key']
+            if key not in seen_keys:
+                pruned_history.append(item)
+                seen_keys.add(key)
+        
+        # Reverse back to maintain original order (newest at bottom)
+        return list(reversed(pruned_history))
+    
+    
+    def extract_facts(self, belief_history):
+        
+        action = 'extract_facts'
+        print(f'Running:{action}')
         
         action = 'extract_facts'
         self.print_chat('Extracting facts from belief_history','text')
         
         cleaned_belief_history = self.sanitize(belief_history)
+        pruned_belief_history = self.prune_history(cleaned_belief_history)
         
         prompt = f"""
         You are a fact extractor inside a BDI agent.
 
-        Given the desire and belief history (a sequence of user inputs), extract the structured information 
-        that is relevant to achieving the user’s desire. Return your result as a JSON object 
-        with key-value pairs.
-        Recent information overwrites old information in the Belief history. For example. If I declare I'm going to Berlin and then, 
-        I declare I rather go to London, London is the destination that should show. 
-        
-        Please notice that the most recent information is at the bottom of the list. 
-        
-        ### User desire:
-        {desire}
+        Given the belief history (a sequence of user inputs), extract the structured information 
+        that is relevant to getting the most accurate and up to date state of the belied system. 
+        Return your result as a JSON object with key-value pairs.
+
 
         ### Belief History:
-        {json.dumps(cleaned_belief_history, indent=2)}
+        {json.dumps(pruned_belief_history, indent=2)}
+
+        IMPORTANT RULES:
+        1. The belief history is ordered chronologically, with the most recent entries at the bottom
+        2. When the same key appears multiple times, ALWAYS use the value from the most recent entry (the last one in the list)
+        3. For example, if the history shows:
+           - departure_city: "New York City" (earlier)
+           - departure_city: "Denver" (later)
+           You should use "Denver" as the departure_city value
+        4. Don't leave fact behind. Every piece of information is important.
         
 
-        Return only a JSON object with relevant data.
+        Return a JSON object with accurate data, always using the most recent value for each key.
         """
         llm_result = self.llm(prompt)
+        print('extract_facts>llm_prompt:',prompt)
         print('extract_facts>llm_result:',llm_result)
         facts = json.loads(llm_result)
-        return facts
+        s_facts = self.sanitize(facts)
+        print('extract_facts> sanitized facts:',s_facts)
+        return s_facts
+    
+    
+    
+    def match_action(self, belief, desire):
+        
+        action = 'match_action'
+        print(f'Running:{action}')
+        
+        self.print_chat('Matching actions with beliefs...','text')
+        
+        #Trying to match an approved action to the current belief
+        
+        # Get an actions list from DB and include it in the desire detection prompt. 
+        # Ask the agent to match the beliefs and history with an Action. 
+        # If there is a match, try to pair beliefs with the action slots. 
+        # Explicitly declare missing slots. Still capture additional data. 
+        # If there is no Action match, keep gathering beliefs until there is a match.
+        
+        
+        actions = self.DAC.get_a_b(self.bridge['portfolio'], self.bridge['org'], 'schd_actions')
+        
+        #Accumulate all actions in a single prompt that we are going to send to the LLM. 
+        prompt_actions = {}
+        
+        for action in actions['items']:
+            
+            print('Every action:',action)
+            
+            prompt_actions[action['key']] = {
+                'goal':action['goal'],
+                'name':action['name'],
+                'utterances':action['utterances'],
+                'slots':action['slots']
+            }
+            
+        prompt = f"""
+        You are a classifier agent in charge of selecting the Action that most closely matches the belief and desire.
+
+        You are given a list of actions from which you are going to select the match (in a JSON object) — the key is the name of the action, the value is the object that describes the action.
+        Each action object has the following attributes: 
+            goal : A sentence explaining what the action accomplishes in the format "This action helps x achieve Y"
+            name : The descriptive name of the action
+            utterance: A series of examples of messages that would use this action
+            slots: The data that is needed to be able to use this action. The agent compares the belief object with the slots to find a match.
+        
+        
+        Analyze all available data and return the key of the action that matches the intent and beliefs. 
+        
+        Return a structured JSON object with the following fields:
+         - confidence : A number from 0 to 100 indicating how confident you are on the action classification 0 = No confidence, 100 = Full confidence.
+         - action : The action key
+         
+         
+        Example output:
+        {{
+            "confidence: 80,
+            "action":"book_a_flight"
+        }}
+        
+        
+        ### List of actions: 
+        {json.dumps(prompt_actions)}
+        
+        ### Beliefs: 
+        {json.dumps(belief)}
+        
+        ### Desire:
+        {desire}
+  
+         
+        
+        """
+        #print('Match Action prompt:',prompt)
+        #response = self.llm(prompt).strip()
+        #return response
+    
+    
+        llm_result = self.llm(prompt)
+        print('match_action>llm_result:',llm_result)
+        action = json.loads(llm_result)
+        s_action = self.sanitize(action)
+        print('extract_facts> sanitized facts:',s_action)
+        return s_action
+    
+    
+    
+
+       
+    #3
+    def reasoning(self):
+        
+        action = 'reasoning'
+        print(f'Running:{action}')
+        
+        try:
+        
+            workspace = self.get_active_workspace()
+            print(workspace)
+            
+
+            
+            # Extract facts from history based on detected desire
+            belief = self.extract_facts(workspace['state']['history'])
+            self.print_chat(belief,'json')
+            self.bridge['belief'] = belief 
+            print('Belief >>', belief)
+            self.mutate_workspace({'belief':belief})
+            
+            
+            # Detect Desire based on belief history
+            desire = self.detect_desire(belief)
+            self.print_chat(desire,'text')
+            self.bridge['desire'] = desire
+            print('Desire >>', desire)
+            self.mutate_workspace({'desire':desire})
+                
+            
+            # Match Action with detected belief and desire
+            act = self.match_action(belief,desire)
+            self.print_chat(act,'json')
+            self.bridge['action'] = act['action']
+            print('Action >>', act)
+            self.mutate_workspace({'action':act})
+            next = 'complete_slots' if int(act['confidence']) > 80 else 'finishing'
+            
+            # Getting slots
+            #response = self.load_action()
+            #workspace_changes['slots'] = response['output']['slots']
+        
+            # Ask user to confirm that matched action is correct
+            '''
+            request = f'Can you confirm that the action you want to perform is to {action}?'
+            self.print_chat(request,'text')
+            follow_up = {
+                'expected' : True,
+                'callback' : 'complete_slots',
+                'options' : ['yes','no'],
+                'request' : request
+            }           
+            workspace_changes['follow_up'] = follow_up
+            '''  
+            
+            
+                
+            
+            
+            return {'success':True,'action':action,'next':next,'input':workspace['state']['history'],'output':{'desire':desire,'belief':belief,'action':act}}
+            
+            
+        except Exception as e:
+            print(f"Error during reasoning: {e}")
+            return {'success':False,'action':action,'input':workspace['state']['history'],'output':e}
+            
+    
+            
+        
+    def confirm_action(self,user_response):
+        
+        action = "confirm_action"
+        self.print_chat('Validating your response...','text')
+        
+        try:
+            question = self.bridge['workspace']['state']['follow_up']['request'] # THIS OBJECT IS NOT ACTIVELY UPDATED!!!! BE CAREFUL
+            options = self.bridge['workspace']['state']['follow_up']['options']
+            
+            prompt = f"""
+                You are an agent that requests information via chat to help users complete tasks. 
+                When the responses from the users come back to you, you need to figure out the following
+                
+                1. If the user answered the question you asked (instead of something different)
+                2. If the answer makes sense. 
+                
+                Sometimes the user will answer in a different way than expected but the answer will still be valid. 
+                For example:
+                - Instead of "yes", they might say "Sure", "ok", "that's fine", "absolutely", "of course", "as long as the sun comes out", etc.
+                - Instead of "no", they might say "nope", "never", "not at all", "if hell freezes", "over my dead body", etc.
+                
+                For context, here is the question that you asked: {question}
+                And here is the list of generic answers that the user is expected to respond with: {options}
+                
+                The **status** declares the state of the response according to the following rules:
+                a. If it was possible to match the response to an item in the list of generic answers (yes or no)
+                   status = 'valid'
+                b. If it was not possible to match the response
+                   status = 'invalid'
+                
+                The **sentiment** declares what is the tone of the answer. For example: formal, ironic, violent, etc
+                
+                Given the user's response and status, return a structured JSON object with the following fields:
+                
+                - "status": **Status** of the response according to the rules indicated above
+                - "normalized_answer": The match to the existing list of generic answers (must be either "yes" or "no")
+                - "sentiment": The **sentiment** detected in the response
+                - "raw_answer": {user_response}
+
+                Do not perform reasoning or fill in missing values. Just answer what is directly mentioned.
+                Make sure to return valid JSON with all strings properly quoted.
+
+                User response: '{user_response}'
+            """
+            
+            response = self.llm(prompt)
+        
+            print(f"confirm_action > Raw prompt: {prompt}")
+            print(f"confirm_action > Raw response: {response}")
+            result = json.loads(response)
+            
+            workspace_changes = {}
+            
+            # Resetting follow_up object
+            if result['status']=='valid':    
+                workspace_changes['follow_up'] = {
+                    'expected' : False,
+                    'callback' : '',
+                    'options' : '',
+                    'request' : ''
+                }  
+            else:
+                workspace_changes['action'] = ''    
+                 
+
+            #self.print_chat('Updating workspace with response result','text')
+            self.mutate_workspace(workspace_changes)
+            
+         
+            
+        except json.JSONDecodeError as e:
+            print(f"Error creating prompt or parsing LLM response: {e}")
+            return {'success':False,'action':action,'input':user_response,'output':e}
+        
+        self.print_chat(result,'json')
+        
+        
+            
+        
+        return {'success':True,'action':action,'input':user_response,'output':result}
+            
+        
+        
+    def complete_slots(self):
+        
+        action = 'complete_slots'
+        self.print_chat('Looking for missing data...','text')
+        
+        act = self.bridge['action']
+        response_0 = self.load_action(act)
+        
+        if not response_0['success']:
+            return response
+        
+        slots = response_0['output']['slots']
+        beliefs = self.bridge['belief']
+        
+        
+        try:
+        
+            prompt = f"""
+                You are an agent that is in charge to check that all slots are full. 
+                Slots are the parameters needed to run a tool.
+                
+                The current action is: {act}
+                The slots required for the current action are: {slots}
+                The current information that we have is in the following beliefs object: {beliefs}
+                
+                IMPORTANT RULES FOR MATCHING SLOTS:
+                1. Look for semantic matches between slot names and belief keys, not just exact matches
+                2. Consider variations and synonyms (e.g., "number_of_passengers" matches "number_of_people", "passengers", "people_count")
+                3. Look for related concepts (e.g., "departure_city" matches "origin", "from_city", "starting_location")
+                4. Consider plural/singular forms and compound words (e.g., "departure_date" matches "departure", "date", "departuredate")
+                5. If a slot has a value in the beliefs, even with a different key name, consider it filled
+                
+                CRITICAL LOGIC RULES:
+                1. A slot is considered "filled" if:
+                   - It has an exact match in the beliefs
+                   - It has a semantic match in the beliefs (e.g., "number_of_passengers" matches "number_of_people")
+                   - The value is not null, empty, or undefined
+                2. The "complete" field should be True ONLY if ALL slots are filled according to the above rules
+                3. The "missing_slots" list should ONLY contain slots that are truly missing (no exact or semantic match)
+                4. If a slot is in the "slots" dictionary with a value, it should NOT be in the "missing_slots" list
+                5. Double-check that any slot with a value in the "slots" dictionary is not listed in "missing_slots"
+                
+                HUMAN PROMPT RULES:
+                1. The human prompt MUST be consistent with the completion status:
+                   - If complete=True: Use "We have all the data that we need" (try to create a variation of the sentence)
+                   - If complete=False: Use "We still need: [list of missing slots]" (try to create a variation of the sentence)
+                2. NEVER say "We have all the data" if there are missing slots
+                3. The human prompt should clearly indicate what information is still needed
+                
+                For example:
+                - If slot is "number_of_passengers" and belief has "number_of_people" with value "2", the slot is filled
+                - If slot is "departure_city" and belief has "origin" with value "New York", the slot is filled
+                - If slot is "return_date" and belief has "end_date" with value "2025-05-01", the slot is filled
+                
+                Given the slot situation, return a structured JSON object with the following fields:
+                
+                - "human_prompt" : The message generated for the human (MUST be consistent with completion status)
+                - "slots" : A dictionary with the slots names as keys and the data obtained from the belief object as values (using semantic matching)
+                - "raw": The original belief object (for context)
+                - "missing_slots" : List of slots that still need data only if *complete* is False
+                - "complete" : True if all the slots are full (considering semantic matches). False if at least one slot is missing
+    
+            """
+        
+            response = self.llm(prompt)
+        
+            print(f"complete_slots > Raw prompt: {prompt}")
+            print(f"complete_slots > Raw response: {response}")
+            result = json.loads(response)
+        except json.JSONDecodeError as e:
+            print(f"Error creating prompt or parsing LLM response: {e}")
+            return {'success':False,'action':action,'input':{'slots':slots,'beliefs':beliefs},'output':e}
+        
+        self.print_chat(result,'json')
+        self.print_chat(result['human_prompt'],'text')
+        self.mutate_workspace({'slots':result['slots']})
+        
+        return {'success':True,'action':action,'input':{'slots':slots,'beliefs':beliefs},'output':result}
+        
     
     
     # Intention Formation (Planning)
@@ -562,7 +956,10 @@ class AgentActions:
         ...
         ]
         """
-        return json.loads(self.llm(prompt))
+        response = json.loads(self.llm(prompt))
+        self.bridge['plan'] = response
+        
+        return response
     
     
     ## Execution of Intentions
@@ -571,6 +968,7 @@ class AgentActions:
         Executes the steps in the intention plan. Handles dynamic variable substitution from context.
         """
         print("🚀 Executing intention...")
+        execution_results = []
         for i, step in enumerate(plan):
             action = step["action"]
             params = step.get("params", {})
@@ -590,11 +988,15 @@ class AgentActions:
                 result = func(**resolved_params)
                 if isinstance(result, dict):
                     self.context.update(result)
+                    execution_results.append(result)
+                    
             except Exception as e:
                 print(f"❌ Error in '{action}': {e}")
+                self.bridge['execute_intention_error'] = f"Error in '{action}': {e}"
                 raise
 
         print("✅ Intention execution complete.")
+        self.bridge['execute_intention_results'] = execution_results
         return self.context
  
     
@@ -617,39 +1019,6 @@ class AgentActions:
         print(f"🧠 Reflection:\n{reflection}\n")
         return reflection
     
-             
-           
-    #3
-    def reasoning(self):
-        
-        action = 'reasoning'
-        print(f'Running:{action}')
-        
-        try:
-        
-            ws = self.get_active_workspace()
-            print(ws)
-            
-            desire = self.detect_desire(ws['state']['history'])
-            print(desire)
-            self.print_chat(desire,'text')
-            self.mutate_workspace(desire,'desire')
-            self.bridge['desire'] = desire
-            
-            belief = self.extract_facts(desire,ws['state']['history'])
-            print(belief)
-            self.print_chat(belief,'json')
-            self.mutate_workspace(belief,'belief')
-            self.bridge['belief'] = belief
-            
-            return {'success':True,'action':action,'input':ws['state']['history'],'output':{'desire':desire,'belied':belief}}
-            
-            
-        except Exception as e:
-            return {'success':False,'action':action,'input':ws['state']['history'],'output':e}
-            
-            
-        
         
     
     #4 
@@ -663,7 +1032,7 @@ class AgentActions:
             plan = self.form_intention(self.bridge['desire'], self.bridge['belief'])
             print(f"  → Plan:\n{json.dumps(plan, indent=2)}")
             self.print_chat(plan,'json')
-            self.mutate_workspace(plan,'intent')
+            self.mutate_workspace({'intent':plan})
             self.bridge['intent'] = plan
             
             return {'success':True,'action':action,'input':{'desire':self.bridge['desire'],'belief':self.bridge['belief']},'output':plan}
@@ -803,22 +1172,21 @@ class AgentActions:
         return workspace
     
     
-    '''
-    def load_action(self,payload):
+    
+    def load_action(self,act):
         
-        action = 'load_action'
-             
-        #Get config document for this portfolio/org
+        action = 'load_action'            
+        #Get action document 
         
         # Look for the document that belongs to the action : payload[action]
         # You might get back a list. Select the most recent one (you can select other ways, e.g by author)
         # The premise is that there might be more than one way to run an action.
         query = {
-            'portfolio':payload['portfolio'],
-            'org':payload['org'],
+            'portfolio':self.bridge['portfolio'],
+            'org':self.bridge['org'],
             'ring':'schd_actions',
             'operator':'begins_with',
-            'value': payload['action'],
+            'value': act,
             'filter':{},
             'limit':999,
             'lastkey':None,
@@ -827,16 +1195,15 @@ class AgentActions:
         print(f'Query: {query}')
         response = self.DAC.get_a_b_query(query)
         print(f'Query: {response}')
-        if not response['success']:return {'success':False,'action':action,'input':payload,'output':response}
+        if not response['success']:return {'success':False,'action':'load_action','input':act,'output':response}
         
         
         if isinstance(response['items'], list) and len(response['items']) > 0:
-            self.bridge['config'] = response['items'][0]
-            print('Action config stored in bridge')
-            return {'success':True,'action':action,'input':payload,'output':response['items'][0]}
+            self.bridge['action_obj'] = response['items'][0]
+            return {'success':True,'action':action,'input':act,'output':response['items'][0]}
         else:
-            return {'success':False,'action':action,'input':payload}
-    '''
+            return {'success':False,'action':action,'input':act}
+    
     
     
     
@@ -865,34 +1232,106 @@ class AgentActions:
         if 'workspace' in payload:
             self.bridge['workspace_id'] = payload['workspace']
             
-           
-
-        
-        print('Starting step 0')
+            
         # Step 0: Create thread/message document
         response_0 = self.new_chat_message_document(payload['data'])
         results.append(response_0)
         if not response_0['success']: return {'success':False,'action':action,'output':results}
+        next_step = 'perception_and_interpretation'
+            
         
+        # Ge the latest workspace and make it available via the bridge
+        workspace = self.get_active_workspace() 
+        self.bridge['workspace'] = workspace
+        
+        # Check if there is a follow up item pending.
+        last_belief = {}
+        if workspace:    
+            if workspace.get('state', {}).get('follow_up', {}).get('expected', False):
+                next_step = 'confirm_action'
+            if workspace.get('state', {}).get('belief', {}):
+                last_belief = workspace['state']['belief']
+            
+             
+        
+        
+        while True:
+            
+        
+            if next_step == 'perception_and_interpretation':
+                # Perception and Interpretation
+                response_1 = self.perception_and_interpretation(payload['data'],last_belief)
+                results.append(response_1)
+                if not response_1['success']: return {'success':False,'action':action,'output':results} 
+                next_step = 'process_information'
+                continue
 
-        # Step 1: Perception and Interpretation
-        response_1 = self.perception_and_interpretation(payload['data'])
-        results.append(response_1)
-        if not response_1['success']: return {'success':False,'action':action,'output':results} 
-
-                        
-        # Step 2: Process Information
-        response_2 = self.process_information(response_1['output'])
-        results.append(response_2)
-        if not response_2['success']: return {'success':False,'action':action,'output':results}
-        
-        
-        # Step 3: Reasoning 
-        response_3 = self.reasoning()
-        results.append(response_3)
-        if not response_3['success']: return {'success':False,'action':action,'output':results}
-        
-   
+            
+            if next_step == 'process_information':            
+                # Process Information
+                response_2 = self.process_information(response_1['output'])
+                results.append(response_2)
+                if not response_2['success']: return {'success':False,'action':action,'output':results}
+                next_step = 'reasoning'
+                continue
+                
+            
+            if next_step == 'reasoning': 
+                # Reasoning 
+                response_3 = self.reasoning()
+                results.append(response_3)
+                if not response_3['success']: return {'success':False,'action':action,'output':results}
+                next_step = response_3['next']
+                continue
+            
+            
+            if next_step == 'confirm_action': 
+                #self.print_chat(f'I got your response:{payload['data']}','text')
+                response_5 = self.confirm_action(payload['data'])
+                results.append(response_5)
+                if not response_5['success']: return {'success':False,'action':action,'output':results}
+                
+                # And then we send it to the callback
+                if response_5['output']['status']=='valid':
+                    #next_step = workspace['follow_up']['callback']
+                    next_step = 'complete_slots'
+                else:
+                    #If the question was not answered, go back to interpreting the message
+                    next_step = 'perception_and_interpretation'
+                continue
+                    
+                
+            if next_step == 'complete_slots':
+                response_6 = self.complete_slots()
+                results.append(response_6)
+                if not response_6['success']: return {'success':False,'action':action,'output':results}
+                next_step = 'finishing'
+                continue
+                
+            
+            if next_step == 'form_intention':
+                response_7 = self.form_intention(self.bridge['action'],self.bridge['belief'])
+                results.append(response_7)
+                if not response_7['success']: return {'success':False,'action':action,'output':results}
+                
+                
+            if next_step == 'execute_intention':
+                response_8 = self.execute_intention(self.bridge['plan'])
+                results.append(response_8)
+                if not response_8['success']: return {'success':False,'action':action,'output':results}
+            
+            
+            if next_step == 'reflect_on_failure':
+                response_9 = self.reflect_on_failure(self.bridge['plan'],self.bridge['execute_intention_error'])
+                results.append(response_9)
+                if not response_9['success']: return {'success':False,'action':action,'output':results}
+            
+            
+            if next_step == 'finishing': 
+                # Finishing 
+                break
+                
+    
         
         
         '''
@@ -935,7 +1374,7 @@ class AgentActions:
         '''
     
 
-        self.print_chat('Cycle completed','text')
+        self.print_chat(f'🤖','text')
         self.bridge['conn'] = ''
             
                   
