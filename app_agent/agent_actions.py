@@ -11,11 +11,17 @@ import json
 import boto3
 from datetime import datetime
 from typing import List, Dict, Any, Callable
-import decimal
+import re
+from decimal import Decimal
 
 
 from env_config import OPENAI_API_KEY,WEBSOCKET_CONNECTIONS
 
+class DecimalEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return int(obj) if obj % 1 == 0 else float(obj)
+        return super(DecimalEncoder, self).default(obj)
 
 class AgentActions:
     def __init__(self):
@@ -52,26 +58,23 @@ class AgentActions:
         
         
         self.tools = ToolRegistry()
+
     
-        
     def print_chat(self,output,type):
-        
-        
         # DataBase
-        doc = {'_out':output,'_type':type}
+        doc = {'_out':self.sanitize(output),'_type':type}
         self.update_chat_message_document(doc)
         
         if not self.bridge['conn']:
             return False
              
         try:
-            
             print(f'Sending Real Time Message to:{self.bridge['conn']}')
             
             # WebSocket
             self.apigw_client.post_to_connection(
                 ConnectionId=self.bridge['conn'],
-                Data=json.dumps(doc)
+                Data=json.dumps(doc, cls=DecimalEncoder)
             )
                
             print(f'Message has been updated')
@@ -157,7 +160,7 @@ class AgentActions:
                         history_event = {
                             'type':'belief',
                             'key': k,
-                            'val': v,
+                            'val': self.sanitize(v),
                             'time': datetime.now().isoformat()
                         }
                         workspace['state']['history'].append(history_event)
@@ -225,8 +228,12 @@ class AgentActions:
             return [self.sanitize(x) for x in obj]
         elif isinstance(obj, dict):
             return {k: self.sanitize(v) for k, v in obj.items()}
-        elif isinstance(obj, (int, float, decimal.Decimal)):
-            return str(obj)
+        elif isinstance(obj, Decimal):
+            # Convert Decimal to int if it's a whole number, otherwise float
+            return int(obj) if obj % 1 == 0 else float(obj)
+        elif isinstance(obj, (int, float)):
+            # Keep numbers as is - they will be handled properly by JSON serialization
+            return obj
         else:
             return obj
                     
@@ -301,15 +308,18 @@ class AgentActions:
         
             print(f'RAW LLM RESPONSE: {chat_completion}')        
             raw_content = chat_completion.choices[0].message.content.strip()
-            self.bridge['completion_result'] = json.loads(raw_content)
+            try:
+                self.bridge['completion_result'] = self.clean_json_response(raw_content)
+            except json.JSONDecodeError as e:
+                error_msg = f"Error parsing LLM response: {e}"
+                print(error_msg)
+                return {'success':False,'action':action,'input':messages,'message':error_msg,'output':e}
                  
-            
         except Exception as e:
             error_msg = f"Error occurred while calling LLM: {e}"
             print(error_msg)
             return {'success':False,'action':action,'input':messages,'message':error_msg,'output':e}
             
-                 
         return {'success':True,'action':action,'message':'Completion executed','input':messages,'output':self.bridge['completion_result'] }
     
     
@@ -363,7 +373,7 @@ class AgentActions:
         
         response = self.llm(prompt)
         try:
-            result = json.loads(response)
+            result = self.clean_json_response(response)
         except json.JSONDecodeError as e:
             print(f"Error parsing LLM response: {e}")
             print(f"perception_and_interpretation > Prompt: {prompt}")
@@ -480,14 +490,7 @@ class AgentActions:
         
         response = self.llm(prompt)
         try:
-            # Clean the response by removing any comments or non-JSON content
-            cleaned_response = response.strip()
-            # Remove any trailing commas
-            cleaned_response = cleaned_response.replace(',}', '}')
-            cleaned_response = cleaned_response.replace(',]', ']')
-            
-            print(f'LLM Response before parsing: {cleaned_response}')
-            parsed_response = json.loads(cleaned_response)
+            parsed_response = self.clean_json_response(response)
             
             # Ensure the response has the required structure
             if not isinstance(parsed_response, dict):
@@ -495,7 +498,6 @@ class AgentActions:
                 
             if "beliefs" not in parsed_response:
                 raise ValueError("Response missing 'beliefs' key")
-            
             
             self.print_chat(parsed_response,'json')
             self.print_chat('Now, I will update the beliefs in the workspace','text')
@@ -607,10 +609,14 @@ class AgentActions:
         llm_result = self.llm(prompt)
         print('extract_facts>llm_prompt:',prompt)
         print('extract_facts>llm_result:',llm_result)
-        facts = json.loads(llm_result)
-        s_facts = self.sanitize(facts)
-        print('extract_facts> sanitized facts:',s_facts)
-        return s_facts
+        try:
+            facts = self.clean_json_response(llm_result)
+            s_facts = self.sanitize(facts)
+            print('extract_facts> sanitized facts:',s_facts)
+            return s_facts
+        except json.JSONDecodeError as e:
+            print(f"Error parsing LLM response in extract_facts: {e}")
+            return {}
     
     
     
@@ -689,11 +695,16 @@ class AgentActions:
     
     
         llm_result = self.llm(prompt)
-        print('match_action>llm_result:',llm_result)
-        action = json.loads(llm_result)
-        s_action = self.sanitize(action)
-        print('extract_facts> sanitized facts:',s_action)
-        return s_action
+       
+        
+        try:
+            action = self.clean_json_response(llm_result)
+            s_action = self.sanitize(action)
+            print('match_action> sanitized facts:',s_action)
+            return s_action
+        except json.JSONDecodeError as e:
+            print(f"Error parsing LLM response in match_action: {e}")
+            return {'confidence': 0, 'action': None}
     
     
     
@@ -733,7 +744,7 @@ class AgentActions:
             self.print_chat(act,'json')
             self.bridge['action'] = act['action']
             print('Action >>', act)
-            self.mutate_workspace({'action':act})
+            self.mutate_workspace({'action':act['action']})
             next = 'complete_slots' if int(act['confidence']) > 80 else 'finishing'
             
             # Getting slots
@@ -816,7 +827,7 @@ class AgentActions:
         
             print(f"confirm_action > Raw prompt: {prompt}")
             print(f"confirm_action > Raw response: {response}")
-            result = json.loads(response)
+            result = self.clean_json_response(response)
             
             workspace_changes = {}
             
@@ -850,6 +861,82 @@ class AgentActions:
             
         
         
+    def clean_json_response(self, response):
+        """
+        Cleans and validates a JSON response string from LLM.
+        
+        Args:
+            response (str): The raw JSON response string from LLM
+            
+        Returns:
+            dict: The parsed JSON object if successful
+            None: If parsing fails
+            
+        Raises:
+            json.JSONDecodeError: If the response cannot be parsed as JSON
+        """
+        try:
+            # Clean the response by ensuring property names are properly quoted
+            cleaned_response = response.strip()
+            
+            # First try to parse as is
+            try:
+                return json.loads(cleaned_response)
+            except json.JSONDecodeError:
+                pass
+                
+            # If that fails, try to fix common issues
+            # Handle unquoted property names at the start of the object
+            cleaned_response = re.sub(r'^\s*{\s*(\w+)(\s*:)', r'{"\1"\2', cleaned_response)
+            
+            # Handle unquoted property names after commas
+            cleaned_response = re.sub(r',\s*(\w+)(\s*:)', r',"\1"\2', cleaned_response)
+            
+            # Handle unquoted property names after newlines
+            cleaned_response = re.sub(r'\n\s*(\w+)(\s*:)', r'\n"\1"\2', cleaned_response)
+            
+            # Replace single quotes with double quotes for property names
+            cleaned_response = re.sub(r'([{,]\s*)\'(\w+)\'(\s*:)', r'\1"\2"\3', cleaned_response)
+            
+            # Replace single quotes with double quotes for string values
+            # This regex looks for : 'value' pattern and replaces it with : "value"
+            cleaned_response = re.sub(r':\s*\'([^\']*)\'', r': "\1"', cleaned_response)
+            
+            # Remove any trailing commas
+            cleaned_response = cleaned_response.replace(',}', '}')
+            cleaned_response = cleaned_response.replace(',]', ']')
+            
+            # Remove any timestamps in square brackets
+            cleaned_response = re.sub(r'\[\d+\]\s*', '', cleaned_response)
+            
+            # Try to parse the cleaned response
+            try:
+                return json.loads(cleaned_response)
+            except json.JSONDecodeError as e:
+                print(f"First attempt failed. Error: {e}")
+                print(f"Cleaned response type: {type(cleaned_response)}")
+                print(f"Cleaned response length: {len(cleaned_response)}")
+                print(f"Cleaned response content: '{cleaned_response}'")
+                
+                # If first attempt fails, try to fix the raw field specifically
+                # Find the raw field and ensure it's properly formatted
+                raw_match = re.search(r'"raw":\s*({[^}]+})', cleaned_response)
+                if raw_match:
+                    raw_content = raw_match.group(1)
+                    # Convert single quotes to double quotes in the raw content
+                    raw_content = raw_content.replace("'", '"')
+                    # Replace the raw field with the cleaned version
+                    cleaned_response = cleaned_response[:raw_match.start(1)] + raw_content + cleaned_response[raw_match.end(1):]
+                
+                print(f"After raw field cleanup - content: '{cleaned_response}'")
+                return json.loads(cleaned_response)
+                
+        except json.JSONDecodeError as e:
+            print(f"Error parsing cleaned JSON response: {e}")
+            print(f"Original response: {response}")
+            print(f"Cleaned response: {cleaned_response}")
+            raise
+
     def complete_slots(self):
         
         action = 'complete_slots'
@@ -866,7 +953,6 @@ class AgentActions:
         
         
         try:
-        
             prompt = f"""
                 You are an agent that is in charge to check that all slots are full. 
                 Slots are the parameters needed to run a tool.
@@ -918,10 +1004,16 @@ class AgentActions:
         
             print(f"complete_slots > Raw prompt: {prompt}")
             print(f"complete_slots > Raw response: {response}")
-            result = json.loads(response)
-        except json.JSONDecodeError as e:
-            print(f"Error creating prompt or parsing LLM response: {e}")
-            return {'success':False,'action':action,'input':{'slots':slots,'beliefs':beliefs},'output':e}
+            
+            try:
+                result_raw = self.clean_json_response(response)
+                result = self.sanitize(result_raw)
+            except json.JSONDecodeError as e:
+                return {'success':False,'action':action,'input':{'slots':slots,'beliefs':beliefs},'output':str(e)}
+                
+        except Exception as e:
+            print(f"Error in complete_slots: {e}")
+            return {'success':False,'action':action,'input':{'slots':slots,'beliefs':beliefs},'output':str(e)}
         
         self.print_chat(result,'json')
         self.print_chat(result['human_prompt'],'text')
@@ -930,7 +1022,7 @@ class AgentActions:
         return {'success':True,'action':action,'input':{'slots':slots,'beliefs':beliefs},'output':result}
         
     
-    
+    #NOT USED YET
     # Intention Formation (Planning)
     def form_intention(self, desire: str, facts: Dict[str, Any]) -> List[Dict[str, Any]]:
         prompt = f"""
@@ -956,12 +1048,16 @@ class AgentActions:
         ...
         ]
         """
-        response = json.loads(self.llm(prompt))
-        self.bridge['plan'] = response
-        
-        return response
+        try:
+            response = self.clean_json_response(self.llm(prompt))
+            self.bridge['plan'] = response
+            return response
+        except json.JSONDecodeError as e:
+            print(f"Error parsing LLM response in form_intention: {e}")
+            return []
     
     
+    # NOT USED YET
     ## Execution of Intentions
     def execute_intention(self, plan: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
@@ -1000,7 +1096,8 @@ class AgentActions:
         return self.context
  
     
-        ## Reflection and Adaptive Replanning
+    #NOT USED YET
+    ## Reflection and Adaptive Replanning
     def reflect_on_failure(self, plan, error) -> str:
         prompt = f"""
         You are a reflection module inside a BDI agent.
@@ -1021,7 +1118,8 @@ class AgentActions:
     
         
     
-    #4 
+    #4  
+    #NOT USED YET
     def planning(self):
     
         action = 'planning'
@@ -1210,9 +1308,8 @@ class AgentActions:
   
     
     def run(self,payload):
-        
         results = []
-        action = 'schd_actions'
+        action = 'agent_actions'
         print(f'Running: {action}')
         
         print(f'Payload: {payload}')   
@@ -1232,154 +1329,104 @@ class AgentActions:
         if 'workspace' in payload:
             self.bridge['workspace_id'] = payload['workspace']
             
+        try:
+            # Step 0: Create thread/message document
+            response_0 = self.new_chat_message_document(payload['data'])
+            results.append(response_0)
+            if not response_0['success']: 
+                return {'success':False,'action':action,'output':results}
+            next_step = 'perception_and_interpretation'
+                
             
-        # Step 0: Create thread/message document
-        response_0 = self.new_chat_message_document(payload['data'])
-        results.append(response_0)
-        if not response_0['success']: return {'success':False,'action':action,'output':results}
-        next_step = 'perception_and_interpretation'
+            # Ge the latest workspace and make it available via the bridge
+            workspace = self.get_active_workspace() 
+            self.bridge['workspace'] = workspace
             
-        
-        # Ge the latest workspace and make it available via the bridge
-        workspace = self.get_active_workspace() 
-        self.bridge['workspace'] = workspace
-        
-        # Check if there is a follow up item pending.
-        last_belief = {}
-        if workspace:    
-            if workspace.get('state', {}).get('follow_up', {}).get('expected', False):
-                next_step = 'confirm_action'
-            if workspace.get('state', {}).get('belief', {}):
-                last_belief = workspace['state']['belief']
+            # Check if there is a follow up item pending.
+            last_belief = {}
+            if workspace:    
+                if workspace.get('state', {}).get('follow_up', {}).get('expected', False):
+                    next_step = 'confirm_action'
+                if workspace.get('state', {}).get('belief', {}):
+                    last_belief = workspace['state']['belief']
             
-             
-        
-        
-        while True:
-            
-        
-            if next_step == 'perception_and_interpretation':
-                # Perception and Interpretation
-                response_1 = self.perception_and_interpretation(payload['data'],last_belief)
-                results.append(response_1)
-                if not response_1['success']: return {'success':False,'action':action,'output':results} 
-                next_step = 'process_information'
-                continue
+            while True:
+                if next_step == 'perception_and_interpretation':
+                    # Perception and Interpretation
+                    response_1 = self.perception_and_interpretation(payload['data'],last_belief)
+                    results.append(response_1)
+                    if not response_1['success']: 
+                        return {'success':False,'action':action,'output':results} 
+                    next_step = 'process_information'
+                    continue
 
-            
-            if next_step == 'process_information':            
-                # Process Information
-                response_2 = self.process_information(response_1['output'])
-                results.append(response_2)
-                if not response_2['success']: return {'success':False,'action':action,'output':results}
-                next_step = 'reasoning'
-                continue
-                
-            
-            if next_step == 'reasoning': 
-                # Reasoning 
-                response_3 = self.reasoning()
-                results.append(response_3)
-                if not response_3['success']: return {'success':False,'action':action,'output':results}
-                next_step = response_3['next']
-                continue
-            
-            
-            if next_step == 'confirm_action': 
-                #self.print_chat(f'I got your response:{payload['data']}','text')
-                response_5 = self.confirm_action(payload['data'])
-                results.append(response_5)
-                if not response_5['success']: return {'success':False,'action':action,'output':results}
-                
-                # And then we send it to the callback
-                if response_5['output']['status']=='valid':
-                    #next_step = workspace['follow_up']['callback']
-                    next_step = 'complete_slots'
-                else:
-                    #If the question was not answered, go back to interpreting the message
-                    next_step = 'perception_and_interpretation'
-                continue
+                if next_step == 'process_information':            
+                    # Process Information
+                    response_2 = self.process_information(response_1['output'])
+                    results.append(response_2)
+                    if not response_2['success']: 
+                        return {'success':False,'action':action,'output':results}
+                    next_step = 'reasoning'
+                    continue
                     
+                if next_step == 'reasoning': 
+                    # Reasoning 
+                    response_3 = self.reasoning()
+                    results.append(response_3)
+                    if not response_3['success']: 
+                        return {'success':False,'action':action,'output':results}
+                    next_step = response_3['next']
+                    continue
                 
-            if next_step == 'complete_slots':
-                response_6 = self.complete_slots()
-                results.append(response_6)
-                if not response_6['success']: return {'success':False,'action':action,'output':results}
-                next_step = 'finishing'
-                continue
+                if next_step == 'confirm_action': 
+                    response_4 = self.confirm_action(payload['data'])
+                    results.append(response_4)
+                    if not response_4['success']: 
+                        return {'success':False,'action':action,'output':results}
+                    
+                    if response_4['output']['status']=='valid':
+                        next_step = 'complete_slots'
+                    else:
+                        next_step = 'perception_and_interpretation'
+                    continue
+                        
+                if next_step == 'complete_slots':
+                    response_5 = self.complete_slots()
+                    results.append(response_5)
+                    if not response_5['success']: 
+                        return {'success':False,'action':action,'output':results}
+                    next_step = 'finishing'
+                    continue
+                    
+                if next_step == 'form_intention':
+                    response_6 = self.form_intention(self.bridge['action'],self.bridge['belief'])
+                    results.append(response_6)
+                    if not response_6['success']: 
+                        return {'success':False,'action':action,'output':results}
+                    
+                if next_step == 'execute_intention':
+                    response_7 = self.execute_intention(self.bridge['plan'])
+                    results.append(response_7)
+                    if not response_7['success']: 
+                        return {'success':False,'action':action,'output':results}
                 
-            
-            if next_step == 'form_intention':
-                response_7 = self.form_intention(self.bridge['action'],self.bridge['belief'])
-                results.append(response_7)
-                if not response_7['success']: return {'success':False,'action':action,'output':results}
+                if next_step == 'reflect_on_failure':
+                    response_8 = self.reflect_on_failure(self.bridge['plan'],self.bridge['execute_intention_error'])
+                    results.append(response_8)
+                    if not response_8['success']: 
+                        return {'success':False,'action':action,'output':results}
                 
-                
-            if next_step == 'execute_intention':
-                response_8 = self.execute_intention(self.bridge['plan'])
-                results.append(response_8)
-                if not response_8['success']: return {'success':False,'action':action,'output':results}
-            
-            
-            if next_step == 'reflect_on_failure':
-                response_9 = self.reflect_on_failure(self.bridge['plan'],self.bridge['execute_intention_error'])
-                results.append(response_9)
-                if not response_9['success']: return {'success':False,'action':action,'output':results}
-            
-            
-            if next_step == 'finishing': 
-                # Finishing 
-                break
-                
-    
-        
-        
-        '''
-        # Step 3: Reasoning and Planning
-        response_3 = self.reasoning_and_planning(self.bridge['information'])
-        results.append(response_3)
-        if not response_3['success']: return {'success':False,'action':action,'output':results}
-        '''
-        
-        
-        
-        '''
-        # Step 4: Validate Plan
-        response_4 = self.validate_plan()
-        results.append(response_4)
-        if not response_4['success']: return {'success':False,'output':results}
-        '''
-    
-        
-        '''
-        # Step 5: Execute Plan
-        response_5 = self.execute_plan(self.bridge['plan'])
-        results.append(response_5)
-        if not response_5['success']: return {'success':False,'output':results}
-        '''
-        
-        
-        '''
-        # Step 6: Verify Execution
-        response_6 = self.verify_execution()
-        results.append(response_6)
-        if not response_6['success']: return {'success':False,'output':results}
-        '''
-        
-        '''
-        # Step 7: Create thread/message document
-        response_7 = self.save_chat_document(payload,{'plan':self.bridge['plan'],'commands':self.bridge['commands']})
-        results.append(response_7)
-        if not response_7['success']: return {'success':False,'action':action,'output':results}
-        '''
-    
+                if next_step == 'finishing': 
+                    # Finishing 
+                    break
 
-        self.print_chat(f'🤖','text')
-        self.bridge['conn'] = ''
+            self.print_chat(f'🤖','text')
             
-                  
-        #All went well, report back
-        return {'success':True,'action':action,'message':'run completed','output':results}
+            #All went well, report back
+            return {'success':True,'action':action,'message':'run completed','output':results}
+            
+        except Exception as e:
+            return {'success':False,'action':action,'message':str(e),'output':results}
         
           
 

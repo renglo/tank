@@ -6,6 +6,14 @@ import boto3
 from boto3.dynamodb.conditions import Key, Attr
 from botocore.exceptions import BotoCoreError, ClientError
 from env_config import DYNAMODB_CHAT_TABLE
+from decimal import Decimal
+import json
+
+class DecimalEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return int(obj) if obj % 1 == 0 else float(obj)
+        return super(DecimalEncoder, self).default(obj)
 
 class ChatModel:
 
@@ -14,7 +22,20 @@ class ChatModel:
         self.dynamodb = boto3.resource('dynamodb', region_name='us-east-1')  # Adjust region if needed
         self.chat_table = self.dynamodb.Table(DYNAMODB_CHAT_TABLE)  
 
-        
+    def sanitize(self, obj):
+        if isinstance(obj, list):
+            return [self.sanitize(x) for x in obj]
+        elif isinstance(obj, dict):
+            return {k: self.sanitize(v) for k, v in obj.items()}
+        elif isinstance(obj, Decimal):
+            # Convert Decimal to int if it's a whole number, otherwise float
+            return int(obj) if obj % 1 == 0 else float(obj)
+        elif isinstance(obj, (int, float)):
+            # Keep numbers as is - DynamoDB will handle them
+            return obj
+        else:
+            return obj
+
     def list_chat(self,index,limit=50,lastkey=None,sort='asc'):
         
         result = {}
@@ -119,12 +140,14 @@ class ChatModel:
         print(f'create_chat > input:{data}')
 
         try:
-            response = self.chat_table.put_item(Item=data)
-            current_app.logger.debug('MODEL: Created chat successfully:'+str(data))
+            # Sanitize data before storing
+            sanitized_data = self.sanitize(data)
+            response = self.chat_table.put_item(Item=sanitized_data)
+            current_app.logger.debug('MODEL: Created chat successfully:'+str(sanitized_data))
             return {
                 "success":True, 
                 "message": "Chat created", 
-                "document": data,
+                "document": sanitized_data,
                 "status" : response['ResponseMetadata']['HTTPStatusCode']
                 }
         except ClientError as e:
@@ -142,12 +165,14 @@ class ChatModel:
 
 
         try:
-            response = self.chat_table.put_item(Item=data)
-            current_app.logger.debug('MODEL: Updated entity successfully:'+str(data))
+            # Sanitize data before storing
+            sanitized_data = self.sanitize(data)
+            response = self.chat_table.put_item(Item=sanitized_data)
+            current_app.logger.debug('MODEL: Updated entity successfully:'+str(sanitized_data))
             return {
                 "success":True, 
                 "message": "Chat updated", 
-                "document": data,
+                "document": sanitized_data,
                 "status" : response['ResponseMetadata']['HTTPStatusCode']
                 }
         except ClientError as e:

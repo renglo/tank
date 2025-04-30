@@ -8,6 +8,17 @@ from app_agent.agent_controller import AgentController
 from app_agent.agent_actions import AgentActions
 from functools import wraps
 import time
+import json
+import boto3
+from decimal import Decimal
+
+from env_config import WEBSOCKET_CONNECTIONS
+
+class DecimalEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return int(obj) if obj % 1 == 0 else float(obj)
+        return super(DecimalEncoder, self).default(obj)
 
 app_chat = Blueprint('app_chat', __name__, url_prefix='/_chat')
 
@@ -78,26 +89,47 @@ def real_time_message():
         response = AGC.triage(payload)
         
         # Handle the case where response is a tuple (response, status)
-        
-        # IT REALLY DOESN'T MATTER WHAT DO WE RESPOND AS IT GOES TO THE API GATEWAY AND GETS LOST THERE
-        # The real output happens through the WebSocket. Actions stream their activity back to the chat via the active WebSocket. 
-        # The only moment when it matters is when the connection is closed. 
-        
         if isinstance(response, tuple):
             response_data, status_code = response
         else:
             response_data, status_code = response, 200
             
+        current_app.logger.debug('TRACE >>')
         current_app.logger.debug(response_data)
         
-        return {
-            'ws': True, 
-            'input': payload,  
-            'output': response_data
-        }, status_code
+        # For WebSocket responses, we need to return a specific format
+        try:
+            response_body = {
+                'ws': True, 
+                'input': payload,  
+                'output': response_data
+            }
+            
+            return {
+                'statusCode': 200,
+                'body': json.dumps(response_body, cls=DecimalEncoder)
+                
+            }
+        except Exception as e:
+            current_app.logger.error(f"Error handling response: {str(e)}")
+            return {
+                'statusCode': 500,
+                'body': json.dumps({
+                    'error': 'Internal server error',
+                    'details': str(e)
+                })
+            }
             
     except Exception as e:
         current_app.logger.error(f"Error processing message: {str(e)}")
+        if payload.get('connectionId'):
+            return {
+                'statusCode': 500,
+                'body': json.dumps({
+                    'error': 'Internal server error',
+                    'details': str(e)
+                })
+            }
         return jsonify({'error': 'Internal server error (654)', 'details': str(e)}), 500
     
 
@@ -182,6 +214,10 @@ def chat_workspaces(entity_type,entity_id,thread_id):
 def chat_tb():
     payload = request.get_json()
     response = AGA.run(payload) 
+    
+    current_app.logger.debug('TRACE >>')
+    current_app.logger.debug(response)
+        
     return response
 
 

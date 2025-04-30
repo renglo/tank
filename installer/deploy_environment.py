@@ -30,7 +30,8 @@ def deploy_environment(env_name: str, aws_profile: str, aws_region: str) -> Depl
     print("\n📦 Creating DynamoDB tables...")
     result.dynamodb_tables = create_dynamodb_tables.run(
         env_name=env_name,
-        aws_profile=aws_profile
+        aws_profile=aws_profile,
+        region=aws_region
     )
 
     # Step 2: Create Cognito User Pool
