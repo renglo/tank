@@ -150,7 +150,7 @@ class AgentActions:
                     workspace['state']['desire'] = output
                     
             if key == 'intent':
-                if isinstance(output, list):
+                if isinstance(output, dict):
                     workspace['state']['intent'] = output 
                     
             if key == 'belief_history':
@@ -238,9 +238,7 @@ class AgentActions:
             return obj
                     
 
-                
-        
-         
+  
     # NOT USED  
     def run_prompt(self,payload):
         
@@ -332,7 +330,7 @@ class AgentActions:
         response = self.AI_1.chat.completions.create(
             model=self.AI_1_MODEL, 
             messages=messages, 
-            temperature=0.5
+            temperature=0
         )
         
         return response.choices[0].message.content.strip()
@@ -745,7 +743,8 @@ class AgentActions:
             self.bridge['action'] = act['action']
             print('Action >>', act)
             self.mutate_workspace({'action':act['action']})
-            next = 'complete_slots' if int(act['confidence']) > 80 else 'finishing'
+            #next = 'complete_slots' if int(act['confidence']) > 80 else 'finishing'
+            next = 'complete_slots'
             
             # Getting slots
             #response = self.load_action()
@@ -763,9 +762,6 @@ class AgentActions:
             }           
             workspace_changes['follow_up'] = follow_up
             '''  
-            
-            
-                
             
             
             return {'success':True,'action':action,'next':next,'input':workspace['state']['history'],'output':{'desire':desire,'belief':belief,'action':act}}
@@ -954,50 +950,53 @@ class AgentActions:
         
         try:
             prompt = f"""
-                You are an agent that is in charge to check that all slots are full. 
-                Slots are the parameters needed to run a tool.
-                
-                The current action is: {act}
-                The slots required for the current action are: {slots}
-                The current information that we have is in the following beliefs object: {beliefs}
-                
-                IMPORTANT RULES FOR MATCHING SLOTS:
+                You are an agent that checks if all required slots (parameters) for an action are filled with valid data.
+
+                CURRENT CONTEXT:
+                - Action: {act}
+                - Required slots: {slots}
+                - Available information: {beliefs}
+
+                SLOT MATCHING RULES:
                 1. Look for semantic matches between slot names and belief keys, not just exact matches
                 2. Consider variations and synonyms (e.g., "number_of_passengers" matches "number_of_people", "passengers", "people_count")
                 3. Look for related concepts (e.g., "departure_city" matches "origin", "from_city", "starting_location")
                 4. Consider plural/singular forms and compound words (e.g., "departure_date" matches "departure", "date", "departuredate")
-                5. If a slot has a value in the beliefs, even with a different key name, consider it filled
-                
-                CRITICAL LOGIC RULES:
-                1. A slot is considered "filled" if:
-                   - It has an exact match in the beliefs
-                   - It has a semantic match in the beliefs (e.g., "number_of_passengers" matches "number_of_people")
-                   - The value is not null, empty, or undefined
-                2. The "complete" field should be True ONLY if ALL slots are filled according to the above rules
-                3. The "missing_slots" list should ONLY contain slots that are truly missing (no exact or semantic match)
-                4. If a slot is in the "slots" dictionary with a value, it should NOT be in the "missing_slots" list
-                5. Double-check that any slot with a value in the "slots" dictionary is not listed in "missing_slots"
-                
-                HUMAN PROMPT RULES:
-                1. The human prompt MUST be consistent with the completion status:
-                   - If complete=True: Use "We have all the data that we need" (try to create a variation of the sentence)
-                   - If complete=False: Use "We still need: [list of missing slots]" (try to create a variation of the sentence)
-                2. NEVER say "We have all the data" if there are missing slots
-                3. The human prompt should clearly indicate what information is still needed
-                
-                For example:
+
+                A slot is considered "filled" if:
+                - It has an exact match in the beliefs
+                - It has a semantic match in the beliefs
+                - The value is not null, empty, or undefined
+                - If a slot is in the "slots" dictionary with a value, it should NOT be in the "missing_slots" list
+
+                Examples of valid matches:
                 - If slot is "number_of_passengers" and belief has "number_of_people" with value "2", the slot is filled
                 - If slot is "departure_city" and belief has "origin" with value "New York", the slot is filled
                 - If slot is "return_date" and belief has "end_date" with value "2025-05-01", the slot is filled
-                
-                Given the slot situation, return a structured JSON object with the following fields:
-                
-                - "human_prompt" : The message generated for the human (MUST be consistent with completion status)
-                - "slots" : A dictionary with the slots names as keys and the data obtained from the belief object as values (using semantic matching)
-                - "raw": The original belief object (for context)
-                - "missing_slots" : List of slots that still need data only if *complete* is False
-                - "complete" : True if all the slots are full (considering semantic matches). False if at least one slot is missing
-    
+
+                RESPONSE FORMAT:
+                Return a JSON object with these fields:
+                {{
+                    "slots": {{
+                        // Dictionary mapping slot names to their values from beliefs
+                        // Use semantic matching to find appropriate values
+                    }},
+                    "raw": {{
+                        // The original belief object (for reference)
+                    }},
+                    "missing_slots": [
+                        // List of slots that still need data
+                        // Only include if complete=false
+                    ],
+                    "complete": true/false,
+                    "human_prompt": "A natural language message explaining the status"
+                }}
+
+                HUMAN PROMPT RULES:
+                1. If complete=true: Use a variation of "We have all the data that we need"
+                2. If complete=false: Use a variation of "We still need: [list of missing slots]"
+                3. Never say "We have all the data" if there are missing slots
+                4. Clearly indicate what information is still needed
             """
         
             response = self.llm(prompt)
@@ -1008,6 +1007,7 @@ class AgentActions:
             try:
                 result_raw = self.clean_json_response(response)
                 result = self.sanitize(result_raw)
+                
             except json.JSONDecodeError as e:
                 return {'success':False,'action':action,'input':{'slots':slots,'beliefs':beliefs},'output':str(e)}
                 
@@ -1017,88 +1017,191 @@ class AgentActions:
         
         self.print_chat(result,'json')
         self.print_chat(result['human_prompt'],'text')
-        self.mutate_workspace({'slots':result['slots']})
+        self.mutate_workspace({'intent':result}) 
+        next = 'form_intention'
         
-        return {'success':True,'action':action,'input':{'slots':slots,'beliefs':beliefs},'output':result}
+        return {'success':True,'action':action,'next':next,'input':{'slots':slots,'beliefs':beliefs},'output':result}
         
     
     #NOT USED YET
     # Intention Formation (Planning)
-    def form_intention(self, desire: str, facts: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def form_intention(self):
+        
+        action = 'form_intention'
+        
+        self.print_chat('Deciding next step...','text')
+        
+        actions = self.DAC.get_a_b(self.bridge['portfolio'], self.bridge['org'], 'schd_actions')
+        
+        #Accumulate all actions in a single prompt that we are going to send to the LLM. 
+        list_actions = {}
+        
+        # TO-DO : You should formalize the tool registry instead of doing this. You can have the tool registry pool do what you are doing below.
+        for a in actions['items']:
+            list_actions[a['key']] = {
+                'goal':a['goal'],
+                'name':a['name'],
+                'utterances':a['utterances'],
+                'slots':a['slots']
+            }        
+            if a['key'] == self.bridge['action']:
+                if 'tools_reference' in a:
+                    examples = a['tools_reference']
+            
+            
         prompt = f"""
-        You are an intention formation module inside a BDI agent.
+        You are a tool selection module inside a BDI agent.
 
-        Given the user's desire, structured facts, and available tools, you must generate a **plan**: 
-        a sequence of executable actions using the available tools to fulfill the desire.
+        Your task is to select the next tool to use based on:
+        1. The current action being executed
+        2. The available information (beliefs)
+        3. The desired outcome
+        4. Previous examples of how this action was executed
 
-        {f'### Reflection on previous failure:\n{self.last_reflection.strip()}' if self.last_reflection else ''}
+        ### Current Action:
+        {self.bridge['action']}
 
-        ### Desire:
-        {desire}
+        ### Available Information:
+        {json.dumps(self.bridge['belief'], indent=2)}
 
-        ### Facts:
-        {json.dumps(facts, indent=2)}
+        ### Desired Outcome:
+        {self.bridge['desire']}
+
+        ### Action Examples:
+        # TO-DO: Add field name to 'examples'
+        {examples}
 
         ### Available Tools:
-        {json.dumps(self.tools, indent=2)}
+        {json.dumps(list_actions)}
 
-        Return a JSON list of actions:
-        [
-        {{ "action": "tool_name", "params": {{ ... }} }},
-        ...
-        ]
+        Return a JSON object with:
+        {{
+            "tool": "name_of_selected_tool",
+            "params": {{
+                // Parameters needed for the tool
+                // Use values from the available information when possible
+            }},
+            "reasoning": "Brief explanation of why this tool was selected"
+        }}
+
+        IMPORTANT:
+        - Only select ONE tool that should be used next
+        - Use the examples to understand the typical sequence of tools
+        - Make sure all required parameters are provided
+        - If you're unsure, select the most basic tool that can make progress
         """
         try:
             response = self.clean_json_response(self.llm(prompt))
+            print(f"form_intention > Prompt: {prompt}")
+            print(f"form_intention > Raw response: {response}")
             self.bridge['plan'] = response
-            return response
-        except json.JSONDecodeError as e:
+            self.print_chat(response,'json')
+            inputs = {'belief':self.bridge['belief'],'desire':self.bridge['desire'],'action':self.bridge['action']}
+            return {'success':True,'action':action,'next':'finishing','input':inputs,'output':response}
+            
+        except json.JSONDecodeError as e:         
             print(f"Error parsing LLM response in form_intention: {e}")
-            return []
+            return {'success':False,'action':action,'next':'finishing','input':inputs,'output':e}
     
     
-    # NOT USED YET
+
     ## Execution of Intentions
-    def execute_intention(self, plan: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def execute_intention(self):
         """
-        Executes the steps in the intention plan. Handles dynamic variable substitution from context.
+        Executes a single tool call based on the tool selection from form_intention().
+        
+        Args:
+            tool_selection: A dictionary containing:
+                - tool: The name of the tool to execute
+                - params: The parameters for the tool
+                - reasoning: The reasoning behind selecting this tool
+                
+        Returns:
+            Dict containing the execution results
         """
-        print("🚀 Executing intention...")
-        execution_results = []
-        for i, step in enumerate(plan):
-            action = step["action"]
-            params = step.get("params", {})
-
-            # Dynamic variable substitution (e.g., {{order_id}})
-            resolved_params = {
-                k: self.context.get(v.strip("{}"), v) if isinstance(v, str) and v.startswith("{{") else v
-                for k, v in params.items()
+        print("🚀 Executing tool...")
+        tool_selection = self.bridge['plan']
+        
+        if not isinstance(tool_selection, dict):
+            raise ValueError("❌ Tool selection must be a dictionary")
+            
+        tool_name = tool_selection.get("tool")
+        params = tool_selection.get("params", {})
+        reasoning = tool_selection.get("reasoning", "")
+        
+        if not tool_name:
+            raise ValueError("❌ No tool name provided in tool selection")
+            
+        print(f"Selected tool: {tool_name}")
+        print(f"Reasoning: {reasoning}")
+        print(f"Parameters: {params}")
+        
+        try:
+            # Get the tool function from the registry
+            tool_func = self.tools.get_tool(tool_name)
+            if not tool_func:
+                raise ValueError(f"❌ No tool registered with name '{tool_name}'")
+                
+            # Execute the tool
+            print(f"⚙️  Executing: {tool_name}({params})")
+            result = tool_func(**params)
+            
+            # Store results
+            execution_result = {
+                "tool": tool_name,
+                "params": params,
+                "result": result,
+                "success": True
             }
-
-            func = self.tool_functions.get(action)
-            if not func:
-                raise ValueError(f"❌ No function registered for action '{action}'")
-
-            try:
-                print(f"⚙️  Step {i+1}: {action}({resolved_params})")
-                result = func(**resolved_params)
-                if isinstance(result, dict):
-                    self.context.update(result)
-                    execution_results.append(result)
+            
+            self.bridge['execute_intention_results'] = execution_result
+            print("✅ Tool execution complete.")
+            
+            return execution_result
                     
-            except Exception as e:
-                print(f"❌ Error in '{action}': {e}")
-                self.bridge['execute_intention_error'] = f"Error in '{action}': {e}"
-                raise
-
-        print("✅ Intention execution complete.")
-        self.bridge['execute_intention_results'] = execution_results
-        return self.context
- 
+        except Exception as e:
+            error_msg = f"❌ Error executing '{tool_name}': {str(e)}"
+            print(error_msg)
+            self.bridge['execute_intention_error'] = error_msg
+            
+            error_result = {
+                "tool": tool_name,
+                "params": params,
+                "error": str(e),
+                "success": False
+            }
+            
+            self.bridge['execute_intention_results'] = error_result
+            return error_result
     
-    #NOT USED YET
+    
+    
     ## Reflection and Adaptive Replanning
-    def reflect_on_failure(self, plan, error) -> str:
+    def reflect_on_success(self) -> str:
+        prompt = f"""
+        You are a reflection module inside a BDI agent.
+
+        The previous intention (plan) succeeded during execution. Figure out if the goal has been achieved yet or we need to form more intentions.
+
+        ### Current Action:
+        {self.bridge['action']}
+
+        ### Desired Outcome:
+        {self.bridge['desire']}
+        
+        ### Available Information:
+        {json.dumps(self.bridge['belief'], indent=2)}
+ 
+
+        Return a short analysis and advice for next steps.
+        """
+        reflection = self.llm(prompt).strip()
+        print(f"🧠 Reflection:\n{reflection}\n")
+        return reflection
+    
+    
+    ## Reflection and Adaptive Replanning
+    def reflect_on_failure(self) -> str:
         prompt = f"""
         You are a reflection module inside a BDI agent.
 
@@ -1338,7 +1441,7 @@ class AgentActions:
             next_step = 'perception_and_interpretation'
                 
             
-            # Ge the latest workspace and make it available via the bridge
+            # Get the latest workspace and make it available via the bridge
             workspace = self.get_active_workspace() 
             self.bridge['workspace'] = workspace
             
@@ -1350,7 +1453,29 @@ class AgentActions:
                 if workspace.get('state', {}).get('belief', {}):
                     last_belief = workspace['state']['belief']
             
+            # Add protection against infinite loops
+            MAX_ITERATIONS = 10  # Maximum number of steps allowed
+            step_counter = 0
+            previous_steps = set()  # Track previous steps to detect cycles
+            
             while True:
+                step_counter += 1
+                
+                # Check if we've exceeded the maximum number of iterations
+                if step_counter > MAX_ITERATIONS:
+                    error_msg = f"❌ Maximum number of iterations ({MAX_ITERATIONS}) exceeded. Possible infinite loop detected."
+                    print(error_msg)
+                    return {'success':False, 'action':action, 'output':error_msg}
+                
+                # Check for cycles in the state machine
+                if next_step in previous_steps:
+                    error_msg = f"❌ Cycle detected in state machine. Step '{next_step}' was already visited."
+                    print(error_msg)
+                    return {'success':False, 'action':action, 'output':error_msg}
+                
+                previous_steps.add(next_step)
+                print(f"Step {step_counter}: {next_step}")
+                
                 if next_step == 'perception_and_interpretation':
                     # Perception and Interpretation
                     response_1 = self.perception_and_interpretation(payload['data'],last_belief)
@@ -1378,7 +1503,10 @@ class AgentActions:
                     next_step = response_3['next']
                     continue
                 
-                if next_step == 'confirm_action': 
+                
+                '''
+                #NOT USED
+                  if next_step == 'confirm_action': 
                     response_4 = self.confirm_action(payload['data'])
                     results.append(response_4)
                     if not response_4['success']: 
@@ -1388,37 +1516,60 @@ class AgentActions:
                         next_step = 'complete_slots'
                     else:
                         next_step = 'perception_and_interpretation'
-                    continue
+                    continue'''
                         
+                
                 if next_step == 'complete_slots':
                     response_5 = self.complete_slots()
                     results.append(response_5)
                     if not response_5['success']: 
                         return {'success':False,'action':action,'output':results}
-                    next_step = 'finishing'
+                    next_step = response_5['next']
                     continue
                     
+                # Planning the next step only
                 if next_step == 'form_intention':
-                    response_6 = self.form_intention(self.bridge['action'],self.bridge['belief'])
+                    response_6 = self.form_intention()
                     results.append(response_6)
                     if not response_6['success']: 
                         return {'success':False,'action':action,'output':results}
+                    #next_step = 'execute_intention'  # Changed from 'finishing' to 'execute_intention'
+                    next_step = 'finishing'  
+                    continue
                     
                 if next_step == 'execute_intention':
-                    response_7 = self.execute_intention(self.bridge['plan'])
+                    response_7 = self.execute_intention()
                     results.append(response_7)
                     if not response_7['success']: 
-                        return {'success':False,'action':action,'output':results}
+                        next_step = 'reflect_on_failure'  # If execution fails, go to reflection
+                    else:
+                        next_step = 'reflect_on_success'  # If execution succeeds, finish
+                    continue     
                 
-                if next_step == 'reflect_on_failure':
-                    response_8 = self.reflect_on_failure(self.bridge['plan'],self.bridge['execute_intention_error'])
+                if next_step == 'reflect_on_success':
+                    response_8 = self.reflect_on_success()
                     results.append(response_8)
                     if not response_8['success']: 
                         return {'success':False,'action':action,'output':results}
+                    next_step = 'finishing'
+                    continue
+               
+                if next_step == 'reflect_on_failure':
+                    response_9 = self.reflect_on_failure()
+                    results.append(response_9)
+                    if not response_9['success']: 
+                        return {'success':False,'action':action,'output':results}
+                    next_step = 'finishing'
+                    continue
                 
                 if next_step == 'finishing': 
                     # Finishing 
                     break
+                    
+                # If we reach here, we have an unknown step
+                error_msg = f"❌ Unknown step '{next_step}' encountered"
+                print(error_msg)
+                return {'success':False, 'action':action, 'error':error_msg, 'output':results}
 
             self.print_chat(f'🤖','text')
             
