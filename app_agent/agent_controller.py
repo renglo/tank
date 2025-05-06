@@ -1,20 +1,14 @@
-from app_agent.agent_actions import AgentActions
-
+from app_agent.agent_core import AgentCore
 
 class AgentController:
 
     def __init__(self,tid=None,ip=None):
+        
+        self.AGC = AgentCore()
 
-        
-        self.AGA = AgentActions()
-        
-        
-
-    
     def triage(self,payload):
         
         action = 'triage'
-
 
         #1. Get a list of all the available actions
         #2. Compare the message with utterances from the actions in the list
@@ -26,7 +20,7 @@ class AgentController:
         response = self.SHC.direct_run(handler, payload) # REPLACE THIS FOR THE TRIAGE. THE TRIAGE WILL USE SHC.direct_run once it determines what handler to use
         '''
         
-        result = self.AGA.run(payload) 
+        result = self.AGC.run(payload) 
         
         if 'success' in result and not result['success']:
             

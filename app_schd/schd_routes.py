@@ -206,5 +206,17 @@ def direct_run(tool,handler):
     
     return jsonify(response), status
 
+
+# Direct handler runs
+@app_schd.route('/<string:portfolio>/<string:org>/call/<string:tool>/<string:handler>',methods=['POST'])
+@cognito_auth_required
+def handler_call(portfolio,org,tool,handler):
     
+    current_app.logger.info('Running: '+tool+'/'+handler)
+    payload = request.get_json() 
+    response, status = SHC.handler_call(portfolio,org,tool,handler,payload)
+    
+    return jsonify(response), status
+
+
 

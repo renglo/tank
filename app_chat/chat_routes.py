@@ -5,7 +5,7 @@ from app_auth.login_required import login_required
 from flask_cognito import cognito_auth_required, current_user, current_cognito_jwt
 from app_chat.chat_controller import ChatController
 from app_agent.agent_controller import AgentController
-from app_agent.agent_actions import AgentActions
+from app_agent.agent_core import AgentCore
 from functools import wraps
 import time
 import json
@@ -24,7 +24,7 @@ app_chat = Blueprint('app_chat', __name__, url_prefix='/_chat')
 
 CHC = ChatController()
 AGC = AgentController()
-AGA = AgentActions()
+AGK = AgentCore()
 
 
 
@@ -213,7 +213,7 @@ def chat_workspaces(entity_type,entity_id,thread_id):
 @cognito_auth_required
 def chat_tb():
     payload = request.get_json()
-    response = AGA.run(payload) 
+    response = AGK.run(payload) 
     
     current_app.logger.debug('TRACE >>')
     current_app.logger.debug(response)

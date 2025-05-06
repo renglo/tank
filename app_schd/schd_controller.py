@@ -203,6 +203,8 @@ class SchdController:
         result = []
 
         action = 'direct_run'
+        
+        print(f'Calling handler:{handler}, payload:{payload}')
              
         response = {'success':False,'output':[]}
         
@@ -218,7 +220,6 @@ class SchdController:
                 result.append({'success':False,'action':action,'handler':'','message':'No valid handler'}) 
                 return result, 400
             
-
         response = self.SHL.load_and_run(handler, payload = payload)
         
         print(f'Handler output:{response}')
@@ -229,6 +230,35 @@ class SchdController:
             return result, 400
         
         result.append({'success':True,'action':action,'handler':handler_name,'input':payload,'output':response})
+
+        return result, 200
+    
+    
+    
+    def handler_call(self,portfolio,org,tool,handler,payload):
+           
+        result = []
+
+        action = 'direct_run'
+        
+        print(f'Calling handler:{handler}, payload:{payload}')
+        
+        payload['portfolio'] = portfolio
+        payload['org'] = org
+        payload['tool'] = tool
+             
+        response = {'success':False,'output':[]}
+            
+        response = self.SHL.load_and_run(f'{tool}/{handler}', payload = payload)
+        
+        print(f'Handler output:{response}')
+        
+        
+        if not response['success']:
+            result.append({'success':False,'action':action,'handler':handler,'input':payload,'output':response})
+            return result, 400
+        
+        result.append({'success':True,'action':action,'handler':handler,'input':payload,'output':response})
 
         return result, 200
     

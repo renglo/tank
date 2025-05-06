@@ -2,6 +2,7 @@
 from app_data.data_controller import DataController
 from app_docs.docs_controller import DocsController
 from app_chat.chat_controller import ChatController
+from app_schd.schd_controller import SchdController
 from app_agent.agent_tools import ToolRegistry
 
 from openai import OpenAI
@@ -13,9 +14,35 @@ from datetime import datetime
 from typing import List, Dict, Any, Callable
 import re
 from decimal import Decimal
-
+from contextvars import ContextVar
+from dataclasses import dataclass, field
+import time
 
 from env_config import OPENAI_API_KEY,WEBSOCKET_CONNECTIONS
+
+@dataclass
+class RequestContext: # Formerly known as "self.bridge"
+    """Request-scoped context for agent operations."""
+    connection_id: str = ''
+    portfolio: str = ''
+    org: str = ''
+    entity_type: str = ''
+    entity_id: str = ''
+    thread: str = ''
+    workspace_id: str = ''
+    chat_id: str = ''
+    workspace: Dict[str, Any] = field(default_factory=dict)
+    belief: Dict[str, Any] = field(default_factory=dict)
+    desire: str = ''
+    action: str = ''
+    plan: Dict[str, Any] = field(default_factory=dict)
+    execute_intention_results: Dict[str, Any] = field(default_factory=dict)
+    execute_intention_error: str = ''
+    completion_result: Dict[str, Any] = field(default_factory=dict)
+    list_handlers: Dict[str, Any] = field(default_factory=dict)
+
+# Create a context variable to store the request context
+request_context: ContextVar[RequestContext] = ContextVar('request_context', default=RequestContext())
 
 class DecimalEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -23,7 +50,7 @@ class DecimalEncoder(json.JSONEncoder):
             return int(obj) if obj % 1 == 0 else float(obj)
         return super(DecimalEncoder, self).default(obj)
 
-class AgentActions:
+class AgentCore:
     def __init__(self):
         
         #OpenAI Client
@@ -39,12 +66,10 @@ class AgentActions:
             #print(OPENAI_API_KEY)
             openai_client = None
             
-        self.bridge = {} 
-        
-        
         self.DAC = DataController()
         self.DCC = DocsController()
         self.CHC = ChatController()
+        self.SHC = SchdController()
         #self.SHL = SchdLoader() # If schd_actions was loaded by schd_loader, this will cause a circular dependency > ERROR
               
         
@@ -53,27 +78,41 @@ class AgentActions:
         self.AI_1_MODEL = "gpt-3.5-turbo" # Baseline model. Good for multi-step chats
         self.AI_2_MODEL = "gpt-4o-mini" # This model is not very smart
         
-        self.bridge['conn'] = ''
         self.apigw_client = boto3.client("apigatewaymanagementapi", endpoint_url=WEBSOCKET_CONNECTIONS)
         
         
         self.tools = ToolRegistry()
 
-    
+    def _get_context(self) -> RequestContext:
+        """Get the current request context."""
+        return request_context.get()
+
+    def _set_context(self, context: RequestContext):
+        """Set the current request context."""
+        request_context.set(context)
+
+    def _update_context(self, **kwargs):
+        """Update specific fields in the current request context."""
+        context = self._get_context()
+        for key, value in kwargs.items():
+            setattr(context, key, value)
+        self._set_context(context)
+
     def print_chat(self,output,type):
         # DataBase
         doc = {'_out':self.sanitize(output),'_type':type}
         self.update_chat_message_document(doc)
         
-        if not self.bridge['conn']:
+        context = self._get_context()
+        if not context.connection_id:
             return False
              
         try:
-            print(f'Sending Real Time Message to:{self.bridge['conn']}')
+            print(f'Sending Real Time Message to:{context.connection_id}')
             
             # WebSocket
             self.apigw_client.post_to_connection(
-                ConnectionId=self.bridge['conn'],
+                ConnectionId=context.connection_id,
                 Data=json.dumps(doc, cls=DecimalEncoder)
             )
                
@@ -83,7 +122,7 @@ class AgentActions:
         
         except self.apigw_client.exceptions.GoneException:
             print(f'Connection is no longer available')
-            self.bridge['conn'] = ''  # Clear the connection ID
+            self._update_context(connection_id='')  # Clear the connection ID
             return False
         except Exception as e:
             print(f'Error sending message: {str(e)}')
@@ -93,14 +132,15 @@ class AgentActions:
                 
     def mutate_workspace(self,changes):
 
-        if not self.bridge['thread']:
+        context = self._get_context()
+        if not context.thread:
             return False
         
 
         print("MUTATE_WORKSPACE>>",changes)
        
         #1. Get the workspace in this thread
-        workspaces_list = self.CHC.list_workspaces(self.bridge['entity_type'],self.bridge['entity_id'],self.bridge['thread']) 
+        workspaces_list = self.CHC.list_workspaces(context.entity_type,context.entity_id,context.thread) 
         print('WORKSPACES_LIST >>',workspaces_list) 
         
         if not workspaces_list['success']:
@@ -108,20 +148,20 @@ class AgentActions:
         
         if len(workspaces_list['items'])==0:
             #Create a workspace as none exist
-            response = self.CHC.create_workspace(self.bridge['entity_type'],self.bridge['entity_id'],self.bridge['thread'],{}) 
+            response = self.CHC.create_workspace(context.entity_type,context.entity_id,context.thread,{}) 
             if not response['success']:
                 return False
             # Regenerate workspaces_list
-            workspaces_list = self.CHC.list_workspaces(self.bridge['entity_type'],self.bridge['entity_id'],self.bridge['thread']) 
+            workspaces_list = self.CHC.list_workspaces(context.entity_type,context.entity_id,context.thread) 
 
             print('WORKSPACES_LIST >>>>',workspaces_list) 
             
             
-        if not self.bridge.get('workspace_id'):
+        if not context.workspace_id:
             workspace = workspaces_list['items'][-1]
         else:
             for w in workspaces_list['items']:
-                if w['_id'] == self.bridge['workspace_id']:
+                if w['_id'] == context.workspace_id:
                     workspace = w
                     
         print('Selected workspace >>>>',workspace) 
@@ -202,7 +242,7 @@ class AgentActions:
          
         
         try:
-            print(f'Sending Real Time Message to:{self.bridge['conn']}')
+            print(f'Sending Real Time Message to:{context.connection_id}')
             #doc = {'_out':workspace,'_type':'json'}
             #self.print_chat(doc,'json')
             
@@ -214,7 +254,7 @@ class AgentActions:
         
         except self.apigw_client.exceptions.GoneException:
             print(f'Connection is no longer available')
-            self.bridge['conn'] = ''  # Clear the connection ID
+            self._update_context(connection_id='')  # Clear the connection ID
             return False
         except Exception as e:
             print(f'Error sending message: {str(e)}')
@@ -250,8 +290,8 @@ class AgentActions:
         
         
         query = {
-            'portfolio':self.bridge['portfolio'],
-            'org':self.bridge['org'],
+            'portfolio':self._get_context().portfolio,
+            'org':self._get_context().org,
             'ring':'agent_feedback',
             'operator':'begins_with',
             'value': payload['feedback_key'],
@@ -307,7 +347,7 @@ class AgentActions:
             print(f'RAW LLM RESPONSE: {chat_completion}')        
             raw_content = chat_completion.choices[0].message.content.strip()
             try:
-                self.bridge['completion_result'] = self.clean_json_response(raw_content)
+                self._update_context(completion_result=self.clean_json_response(raw_content))
             except json.JSONDecodeError as e:
                 error_msg = f"Error parsing LLM response: {e}"
                 print(error_msg)
@@ -318,7 +358,7 @@ class AgentActions:
             print(error_msg)
             return {'success':False,'action':action,'input':messages,'message':error_msg,'output':e}
             
-        return {'success':True,'action':action,'message':'Completion executed','input':messages,'output':self.bridge['completion_result'] }
+        return {'success':True,'action':action,'message':'Completion executed','input':messages,'output':self._get_context().completion_result}
     
     
     
@@ -634,20 +674,16 @@ class AgentActions:
         # If there is no Action match, keep gathering beliefs until there is a match.
         
         
-        actions = self.DAC.get_a_b(self.bridge['portfolio'], self.bridge['org'], 'schd_actions')
+        actions = self.DAC.get_a_b(self._get_context().portfolio, self._get_context().org, 'schd_actions')
         
         #Accumulate all actions in a single prompt that we are going to send to the LLM. 
-        prompt_actions = {}
-        
-        for action in actions['items']:
-            
-            print('Every action:',action)
-            
-            prompt_actions[action['key']] = {
-                'goal':action['goal'],
-                'name':action['name'],
-                'utterances':action['utterances'],
-                'slots':action['slots']
+        list_actions = {}
+        for a in actions['items']:
+            list_actions[a['key']] = {
+                'goal':a['goal'],
+                'name':a['name'],
+                'utterances':a['utterances'],
+                'slots':a['slots']
             }
             
         prompt = f"""
@@ -676,7 +712,7 @@ class AgentActions:
         
         
         ### List of actions: 
-        {json.dumps(prompt_actions)}
+        {json.dumps(list_actions)}
         
         ### Beliefs: 
         {json.dumps(belief)}
@@ -724,24 +760,21 @@ class AgentActions:
             # Extract facts from history based on detected desire
             belief = self.extract_facts(workspace['state']['history'])
             self.print_chat(belief,'json')
-            self.bridge['belief'] = belief 
-            print('Belief >>', belief)
+            self._update_context(belief=belief)
             self.mutate_workspace({'belief':belief})
             
             
             # Detect Desire based on belief history
             desire = self.detect_desire(belief)
             self.print_chat(desire,'text')
-            self.bridge['desire'] = desire
-            print('Desire >>', desire)
+            self._update_context(desire=desire)
             self.mutate_workspace({'desire':desire})
                 
             
             # Match Action with detected belief and desire
             act = self.match_action(belief,desire)
             self.print_chat(act,'json')
-            self.bridge['action'] = act['action']
-            print('Action >>', act)
+            self._update_context(action=act['action'])
             self.mutate_workspace({'action':act['action']})
             #next = 'complete_slots' if int(act['confidence']) > 80 else 'finishing'
             next = 'complete_slots'
@@ -780,8 +813,8 @@ class AgentActions:
         self.print_chat('Validating your response...','text')
         
         try:
-            question = self.bridge['workspace']['state']['follow_up']['request'] # THIS OBJECT IS NOT ACTIVELY UPDATED!!!! BE CAREFUL
-            options = self.bridge['workspace']['state']['follow_up']['options']
+            question = self._get_context().workspace['state']['follow_up']['request'] # THIS OBJECT IS NOT ACTIVELY UPDATED!!!! BE CAREFUL
+            options = self._get_context().workspace['state']['follow_up']['options']
             
             prompt = f"""
                 You are an agent that requests information via chat to help users complete tasks. 
@@ -938,14 +971,14 @@ class AgentActions:
         action = 'complete_slots'
         self.print_chat('Looking for missing data...','text')
         
-        act = self.bridge['action']
+        act = self._get_context().action
         response_0 = self.load_action(act)
         
         if not response_0['success']:
             return response
         
         slots = response_0['output']['slots']
-        beliefs = self.bridge['belief']
+        beliefs = self._get_context().belief
         
         
         try:
@@ -1017,7 +1050,7 @@ class AgentActions:
         
         self.print_chat(result,'json')
         self.print_chat(result['human_prompt'],'text')
-        self.mutate_workspace({'intent':result}) 
+        
         next = 'form_intention'
         
         return {'success':True,'action':action,'next':next,'input':{'slots':slots,'beliefs':beliefs},'output':result}
@@ -1031,24 +1064,32 @@ class AgentActions:
         
         self.print_chat('Deciding next step...','text')
         
-        actions = self.DAC.get_a_b(self.bridge['portfolio'], self.bridge['org'], 'schd_actions')
+        actions = self.DAC.get_a_b(self._get_context().portfolio, self._get_context().org, 'schd_actions')
         
-        #Accumulate all actions in a single prompt that we are going to send to the LLM. 
+        #REPEATED CODE  (We already did this in match_action)
+        # The difference is that in match_action() we did it to infer the current action. 
+        # While in form_intention() we do it to infer the next action.
         list_actions = {}
-        
-        # TO-DO : You should formalize the tool registry instead of doing this. You can have the tool registry pool do what you are doing below.
+        list_handlers = {}
         for a in actions['items']:
             list_actions[a['key']] = {
                 'goal':a['goal'],
                 'name':a['name'],
                 'utterances':a['utterances'],
                 'slots':a['slots']
-            }        
-            if a['key'] == self.bridge['action']:
+            } 
+            
+            if 'handler' in a:
+                list_handlers[a['key']] = a['handler']
+            
+            # Using the loop to extract the examples of the current action       
+            if a['key'] == self._get_context().action:
                 if 'tools_reference' in a:
                     examples = a['tools_reference']
             
-            
+        # Store list_handlers in context
+        self._update_context(list_handlers=list_handlers)
+        
         prompt = f"""
         You are a tool selection module inside a BDI agent.
 
@@ -1059,13 +1100,13 @@ class AgentActions:
         4. Previous examples of how this action was executed
 
         ### Current Action:
-        {self.bridge['action']}
+        {self._get_context().action}
 
         ### Available Information:
-        {json.dumps(self.bridge['belief'], indent=2)}
+        {json.dumps(self._get_context().belief, indent=2)}
 
         ### Desired Outcome:
-        {self.bridge['desire']}
+        {self._get_context().desire}
 
         ### Action Examples:
         # TO-DO: Add field name to 'examples'
@@ -1094,84 +1135,100 @@ class AgentActions:
             response = self.clean_json_response(self.llm(prompt))
             print(f"form_intention > Prompt: {prompt}")
             print(f"form_intention > Raw response: {response}")
-            self.bridge['plan'] = response
+            self._update_context(plan=response)
+            self.mutate_workspace({'intent':response})
             self.print_chat(response,'json')
-            inputs = {'belief':self.bridge['belief'],'desire':self.bridge['desire'],'action':self.bridge['action']}
-            return {'success':True,'action':action,'next':'finishing','input':inputs,'output':response}
+            self.print_chat(response['reasoning'],'text')
+            
+            if response['tool'] not in list_actions:
+                next = 'finishing'
+                return {'success':False,'action':action,'next':next,'input':inputs,'output':e}
+                
+             
+            inputs = {'belief':self._get_context().belief,'desire':self._get_context().desire,'action':self._get_context().action}
+            next = 'execute_intention'  
+            return {'success':True,'action':action,'next':next,'input':inputs,'output':response}
             
         except json.JSONDecodeError as e:         
             print(f"Error parsing LLM response in form_intention: {e}")
-            return {'success':False,'action':action,'next':'finishing','input':inputs,'output':e}
+            next = 'finishing'
+            return {'success':False,'action':action,'next':next,'input':inputs,'output':e}
     
     
 
     ## Execution of Intentions
     def execute_intention(self):
-        """
-        Executes a single tool call based on the tool selection from form_intention().
         
-        Args:
-            tool_selection: A dictionary containing:
-                - tool: The name of the tool to execute
-                - params: The parameters for the tool
-                - reasoning: The reasoning behind selecting this tool
+        action = 'execute_intention'
+    
+        """Execute the current intention and return standardized response"""
+        #try:
+        if True:
+        
+            # Get current intention
+            intention = self._get_context().plan
+            if not intention:
+                return {
+                    'success': False,
+                    'action': action,
+                    'input': intention,
+                    'output': 'No intention to execute'
+                }
+
+            # Get action and inputs
+            tool_name = intention.get('tool')
+            params = intention.get('params', {})
+            reasoning = intention.get('reasoning', "")
+
+            if not tool_name:
+                raise ValueError("❌ No tool name provided in tool selection")
                 
-        Returns:
-            Dict containing the execution results
-        """
-        print("🚀 Executing tool...")
-        tool_selection = self.bridge['plan']
+            print(f"Selected tool: {tool_name}")
+            print(f"Reasoning: {reasoning}")
+            print(f"Parameters: {params}")
         
-        if not isinstance(tool_selection, dict):
-            raise ValueError("❌ Tool selection must be a dictionary")
+        
+            list_handlers = self._get_context().list_handlers
             
-        tool_name = tool_selection.get("tool")
-        params = tool_selection.get("params", {})
-        reasoning = tool_selection.get("reasoning", "")
-        
-        if not tool_name:
-            raise ValueError("❌ No tool name provided in tool selection")
-            
-        print(f"Selected tool: {tool_name}")
-        print(f"Reasoning: {reasoning}")
-        print(f"Parameters: {params}")
-        
-        try:
-            # Get the tool function from the registry
-            tool_func = self.tools.get_tool(tool_name)
-            if not tool_func:
-                raise ValueError(f"❌ No tool registered with name '{tool_name}'")
+            if tool_name not in list_handlers:
+                error_msg = f"❌ No handler found for tool '{tool_name}'"
+                print(error_msg)
+                self.print_chat(error_msg, 'text')
+                raise ValueError(error_msg)
                 
-            # Execute the tool
-            print(f"⚙️  Executing: {tool_name}({params})")
-            result = tool_func(**params)
+            self.print_chat(f'Calling {list_handlers[tool_name]} ','text') 
+            result = self.SHC.direct_run(list_handlers[tool_name], params)
+            
+            self.print_chat(result,'json')
             
             # Store results
             execution_result = {
-                "tool": tool_name,
-                "params": params,
-                "result": result,
-                "success": True
+                "success": True,
+                "action":action,
+                "input": intention,
+                "output": result
             }
             
-            self.bridge['execute_intention_results'] = execution_result
+            self._update_context(execute_intention_results=execution_result)
             print("✅ Tool execution complete.")
             
             return execution_result
                     
-        except Exception as e:
-            error_msg = f"❌ Error executing '{tool_name}': {str(e)}"
+        #except Exception as e:
+        else:
+            error_msg = f"❌ Execute Intention failed: '{tool_name}': {str(e)}"
+            self.print_chat(error_msg,'text') 
             print(error_msg)
-            self.bridge['execute_intention_error'] = error_msg
+            self._update_context(execute_intention_error=error_msg)
             
             error_result = {
-                "tool": tool_name,
-                "params": params,
-                "error": str(e),
-                "success": False
+                "success": False,
+                "action": action,
+                "input": intention,
+                "output": str(e)    
             }
             
-            self.bridge['execute_intention_results'] = error_result
+            self._update_context(execute_intention_results=error_result)
             return error_result
     
     
@@ -1184,19 +1241,20 @@ class AgentActions:
         The previous intention (plan) succeeded during execution. Figure out if the goal has been achieved yet or we need to form more intentions.
 
         ### Current Action:
-        {self.bridge['action']}
+        {self._get_context().action}
 
         ### Desired Outcome:
-        {self.bridge['desire']}
+        {self._get_context().desire}
         
         ### Available Information:
-        {json.dumps(self.bridge['belief'], indent=2)}
+        {json.dumps(self._get_context().belief, indent=2)}
  
 
         Return a short analysis and advice for next steps.
         """
         reflection = self.llm(prompt).strip()
         print(f"🧠 Reflection:\n{reflection}\n")
+        self.print_chat(f"🧠 Reflection:\n{reflection}\n",'text') 
         return reflection
     
     
@@ -1208,15 +1266,16 @@ class AgentActions:
         The previous intention (plan) failed during execution. Analyze what went wrong, and suggest what to adjust in future planning.
 
         ### Plan:
-        {json.dumps(plan, indent=2)}
+        {json.dumps(self._get_context().plan, indent=2)}
 
         ### Error:
-        {str(error)}
+        {str(self._get_context().execute_intention_error)}
 
         Return a short analysis and advice for replanning.
         """
         reflection = self.llm(prompt).strip()
         print(f"🧠 Reflection:\n{reflection}\n")
+        #self.print_chat(f"🧠 Reflection:\n{reflection}\n",'text') 
         return reflection
     
         
@@ -1230,16 +1289,16 @@ class AgentActions:
         try:
         
             print("📋 Forming intention (planning)...")
-            plan = self.form_intention(self.bridge['desire'], self.bridge['belief'])
+            plan = self.form_intention()
             print(f"  → Plan:\n{json.dumps(plan, indent=2)}")
             self.print_chat(plan,'json')
             self.mutate_workspace({'intent':plan})
-            self.bridge['intent'] = plan
+            self._update_context(intent=plan)
             
-            return {'success':True,'action':action,'input':{'desire':self.bridge['desire'],'belief':self.bridge['belief']},'output':plan}
+            return {'success':True,'action':action,'input':{'desire':self._get_context().desire,'belief':self._get_context().belief},'output':plan}
                    
         except Exception as e:
-            return {'success':False,'action':action,'input':{'desire':self.bridge['desire'],'belief':self.bridge['belief']},'output':e}
+            return {'success':False,'action':action,'input':{'desire':self._get_context().desire,'belief':self._get_context().belief},'output':e}
         
         
 
@@ -1252,11 +1311,11 @@ class AgentActions:
         #self.print_chat('Creating new chat document...','text')
         
         context = {}
-        context['portfolio'] = self.bridge['portfolio']
-        context['org'] = self.bridge['org']
-        context['entity_type'] = self.bridge['entity_type']
-        context['entity_id'] = self.bridge['entity_id']
-        context['thread'] = self.bridge['thread']
+        context['portfolio'] = self._get_context().portfolio
+        context['org'] = self._get_context().org
+        context['entity_type'] = self._get_context().entity_type
+        context['entity_id'] = self._get_context().entity_id
+        context['thread'] = self._get_context().thread
                     
         message_object = {}
         message_object['message'] = message
@@ -1264,13 +1323,13 @@ class AgentActions:
         message_object['input'] = message
          
         response = self.CHC.create_message(
-                        self.bridge['entity_type'],
-                        self.bridge['entity_id'],
-                        self.bridge['thread'],
+                        self._get_context().entity_type,
+                        self._get_context().entity_id,
+                        self._get_context().thread,
                         message_object
                     ) 
         
-        self.bridge['chat_id'] = response['document']['_id']       
+        self._update_context(chat_id=response['document']['_id'])       
         print(f'Response:{response}')
     
         if 'success' not in response:
@@ -1287,10 +1346,10 @@ class AgentActions:
         #self.print_chat('Updating chat document...','text')
         
         response = self.CHC.update_message(
-                        self.bridge['entity_type'],
-                        self.bridge['entity_id'],
-                        self.bridge['thread'],
-                        self.bridge['chat_id'],
+                        self._get_context().entity_type,
+                        self._get_context().entity_id,
+                        self._get_context().thread,
+                        self._get_context().chat_id,
                         update
                     )
         
@@ -1308,9 +1367,9 @@ class AgentActions:
         #self.print_chat('Updating chat document...','text')
         
         response = self.CHC.update_workspace(
-                        self.bridge['entity_type'],
-                        self.bridge['entity_id'],
-                        self.bridge['thread'],
+                        self._get_context().entity_type,
+                        self._get_context().entity_id,
+                        self._get_context().thread,
                         workspace_id,
                         update
                     )
@@ -1329,11 +1388,11 @@ class AgentActions:
         #self.print_chat('Creating new chat document...','text')
         
         context = {}
-        context['portfolio'] = self.bridge['portfolio']
-        context['org'] = self.bridge['org']
-        context['entity_type'] = self.bridge['entity_type']
-        context['entity_id'] = self.bridge['entity_id']
-        context['thread'] = self.bridge['thread']
+        context['portfolio'] = self._get_context().portfolio
+        context['org'] = self._get_context().org
+        context['entity_type'] = self._get_context().entity_type
+        context['entity_id'] = self._get_context().entity_id
+        context['thread'] = self._get_context().thread
                     
         message_object = {}
         message_object['context'] = context
@@ -1341,9 +1400,9 @@ class AgentActions:
         message_object['config'] = config
         message_object['data'] = data
          
-        response = self.CHC.create_message(self.bridge['entity_type'],self.bridge['entity_id'],self.bridge['thread'],message_object) 
+        response = self.CHC.create_message(self._get_context().entity_type,self._get_context().entity_id,self._get_context().thread,message_object) 
         
-        self.bridge['chat_id'] = response['document']['_id']       
+        self._update_context(chat_id=response['document']['_id'])       
         print(f'Response:{response}')
     
         if 'success' not in response:
@@ -1355,7 +1414,7 @@ class AgentActions:
     
     def get_active_workspace(self):
         
-        workspaces_list = self.CHC.list_workspaces(self.bridge['entity_type'],self.bridge['entity_id'],self.bridge['thread']) 
+        workspaces_list = self.CHC.list_workspaces(self._get_context().entity_type,self._get_context().entity_id,self._get_context().thread) 
         
         if not workspaces_list['success']:
             return False
@@ -1363,11 +1422,11 @@ class AgentActions:
         if len(workspaces_list['items'])==0:
             return False
         
-        if not self.bridge.get('workspace_id'):
+        if not self._get_context().workspace_id:
             workspace = workspaces_list['items'][-1]
         else:
             for w in workspaces_list['items']:
-                if w['_id'] == self.bridge['workspace_id']:
+                if w['_id'] == self._get_context().workspace_id:
                     workspace = w
                     
         return workspace
@@ -1383,8 +1442,8 @@ class AgentActions:
         # You might get back a list. Select the most recent one (you can select other ways, e.g by author)
         # The premise is that there might be more than one way to run an action.
         query = {
-            'portfolio':self.bridge['portfolio'],
-            'org':self.bridge['org'],
+            'portfolio':self._get_context().portfolio,
+            'org':self._get_context().org,
             'ring':'schd_actions',
             'operator':'begins_with',
             'value': act,
@@ -1400,7 +1459,7 @@ class AgentActions:
         
         
         if isinstance(response['items'], list) and len(response['items']) > 0:
-            self.bridge['action_obj'] = response['items'][0]
+            self._update_context(action_obj=response['items'][0])
             return {'success':True,'action':action,'input':act,'output':response['items'][0]}
         else:
             return {'success':False,'action':action,'input':act}
@@ -1411,26 +1470,33 @@ class AgentActions:
   
     
     def run(self,payload):
+        # Initialize a new request context
+        context = RequestContext()
+        
+        # Update context with payload data
+        if 'connectionId' in payload:
+            context.connection_id = payload["connectionId"]      
+        if 'portfolio' in payload:
+            context.portfolio = payload['portfolio']
+        if 'org' in payload:
+            context.org = payload['org']
+        if 'entity_type' in payload:
+            context.entity_type = payload['entity_type']
+        if 'entity_id' in payload:
+            context.entity_id = payload['entity_id']
+        if 'thread' in payload:
+            context.thread = payload['thread']
+        if 'workspace' in payload:
+            context.workspace_id = payload['workspace']
+            
+        # Set the context for this request
+        self._set_context(context)
+            
         results = []
         action = 'agent_actions'
         print(f'Running: {action}')
         
         print(f'Payload: {payload}')   
-        
-        if 'connectionId' in payload:
-            self.bridge['conn'] = payload["connectionId"]      
-        if 'portfolio' in payload:
-            self.bridge['portfolio'] = payload['portfolio']
-        if 'org' in payload:
-            self.bridge['org'] = payload['org']
-        if 'entity_type' in payload:
-            self.bridge['entity_type'] = payload['entity_type']
-        if 'entity_id' in payload:
-            self.bridge['entity_id'] = payload['entity_id']
-        if 'thread' in payload:
-            self.bridge['thread'] = payload['thread']
-        if 'workspace' in payload:
-            self.bridge['workspace_id'] = payload['workspace']
             
         try:
             # Step 0: Create thread/message document
@@ -1441,9 +1507,9 @@ class AgentActions:
             next_step = 'perception_and_interpretation'
                 
             
-            # Get the latest workspace and make it available via the bridge
+            # Get the latest workspace and make it available via the context
             workspace = self.get_active_workspace() 
-            self.bridge['workspace'] = workspace
+            self._update_context(workspace=workspace)
             
             # Check if there is a follow up item pending.
             last_belief = {}
@@ -1460,6 +1526,8 @@ class AgentActions:
             
             while True:
                 step_counter += 1
+                
+                self.print_chat(f"Next Step:{next_step}",'text') 
                 
                 # Check if we've exceeded the maximum number of iterations
                 if step_counter > MAX_ITERATIONS:
@@ -1533,11 +1601,12 @@ class AgentActions:
                     results.append(response_6)
                     if not response_6['success']: 
                         return {'success':False,'action':action,'output':results}
-                    #next_step = 'execute_intention'  # Changed from 'finishing' to 'execute_intention'
-                    next_step = 'finishing'  
+                    next_step = 'execute_intention'
+                    #next_step = response_6['next'] 
                     continue
                     
-                if next_step == 'execute_intention':
+                if next_step == 'execute_intention': 
+                    self.print_chat(f"Reached execute_intention",'text') 
                     response_7 = self.execute_intention()
                     results.append(response_7)
                     if not response_7['success']: 
