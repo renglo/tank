@@ -21,7 +21,7 @@ import time
 from env_config import OPENAI_API_KEY,WEBSOCKET_CONNECTIONS
 
 @dataclass
-class RequestContext: # Formerly known as "self.bridge"
+class RequestContext:
     """Request-scoped context for agent operations."""
     connection_id: str = ''
     portfolio: str = ''
@@ -181,8 +181,8 @@ class AgentCore:
             if key == 'belief':
                 # output = {"date":"345"}
                 if isinstance(output, dict):
-                    #workspace['state']['beliefs'] = {**workspace['state']['beliefs'], **output} #Creates a new dictionary that combines both dictionaries
-                    workspace['state']['beliefs'] = output
+                    workspace['state']['beliefs'] = {**workspace['state']['beliefs'], **output} #Creates a new dictionary that combines both dictionaries
+                    
             
             if key == 'desire':
                 if isinstance(output, str):
@@ -383,8 +383,6 @@ class AgentCore:
         action = 'perception_and_interpretation'
         self.print_chat('Interpreting message and extracting information from it...','text')
         
-        
-        
         prompt = f"""
             You are a perception module for an intelligent agent. Your job is to interpret raw user input and extract structured information from it.
 
@@ -424,7 +422,7 @@ class AgentCore:
                 "needs_tools": []
             }
             
-            return {'success':False,'action':action,'input':message,'output':default_result}
+            return {'success':False,'action':action,'next':'finishing','input':message,'output':default_result}
             
             
         
@@ -457,9 +455,9 @@ class AgentCore:
                         result["entities"]["departure_city"] = location
         
         
-        self.print_chat(result,'json')
-        
-        return {'success':True,'action':action,'input':message,'output':result}
+        self.print_chat(result,'json')       
+        next = 'process_information'
+        return {'success':True,'action':action,'next':next,'input':message,'output':result}
     
     
     
@@ -540,19 +538,16 @@ class AgentCore:
             self.print_chat(parsed_response,'json')
             self.print_chat('Now, I will update the beliefs in the workspace','text')
             self.mutate_workspace({'belief_history':parsed_response['beliefs']['entities']})
-        
-            return {'success':True,'action':action,'input':input,'output':parsed_response}
+            
+            next = 'reasoning'
+            return {'success':True,'action':action,'next':next,'input':input,'output':parsed_response}
             
         except (json.JSONDecodeError, ValueError) as e:
             print(f"Error parsing LLM response in process_information: {e}")
             print(f"Raw response: {response}")
-            
-            
-            return {'success':False,'action':action,'input':input,'output':None}
+            return {'success':False,'action':action,'next':'finishing','input':input,'output':None}
     
-    
-    
-    
+
 
     
     def detect_desire(self, belief):
@@ -906,7 +901,10 @@ class AgentCore:
         """
         try:
             # Clean the response by ensuring property names are properly quoted
-            cleaned_response = response.strip()
+            cleaned_response = response.strip() 
+            # Remove any comments (both single-line and multi-line)
+            cleaned_response = re.sub(r'//.*?$', '', cleaned_response, flags=re.MULTILINE)  # Remove single-line comments
+            cleaned_response = re.sub(r'/\*.*?\*/', '', cleaned_response, flags=re.DOTALL)  # Remove multi-line comments
             
             # First try to parse as is
             try:
@@ -959,6 +957,7 @@ class AgentCore:
                 
                 print(f"After raw field cleanup - content: '{cleaned_response}'")
                 return json.loads(cleaned_response)
+        
                 
         except json.JSONDecodeError as e:
             print(f"Error parsing cleaned JSON response: {e}")
@@ -971,41 +970,62 @@ class AgentCore:
         action = 'complete_slots'
         self.print_chat('Looking for missing data...','text')
         
-        act = self._get_context().action
-        response_0 = self.load_action(act)
+        # Get current workspace
+        workspace = self.get_active_workspace()
+        if not workspace:
+            return {'success': False, 'action': action, 'message': 'No active workspace found'}
         
-        if not response_0['success']:
-            return response
+        # Get current action and its details
+        current_action = workspace.get('state', {}).get('action', '')
+        if not current_action:
+            return {'success': False, 'action': action, 'message': 'No action found in workspace'}
+            
+        # Get action details from database
+        actions = self.DAC.get_a_b(self._get_context().portfolio, self._get_context().org, 'schd_actions')
+        action_details = None
+        for a in actions['items']:
+            if a['key'] == current_action:
+                action_details = a
+                break
+                
+        if not action_details:
+            return {'success': False, 'action': action, 'message': f'Action {current_action} not found in database'}
+            
+        # Get current beliefs and history
+        current_beliefs = workspace.get('state', {}).get('beliefs', {})
+        belief_history = workspace.get('state', {}).get('history', [])
         
-        slots = response_0['output']['slots']
-        beliefs = self._get_context().belief
+        # Clean and prepare belief history
+        cleaned_current_beliefs = self.sanitize(current_beliefs)
         
+        cleaned_belief_history = self.sanitize(belief_history)
+        pruned_belief_history = self.prune_history(cleaned_belief_history)
         
         try:
             prompt = f"""
                 You are an agent that checks if all required slots (parameters) for an action are filled with valid data.
 
                 CURRENT CONTEXT:
-                - Action: {act}
-                - Required slots: {slots}
-                - Available information: {beliefs}
+                - Action: {current_action}
+                - Action Description: {action_details.get('goal', '')}
+                - Required slots: {json.dumps(action_details.get('slots', {}), indent=2)}
+                - Current Beliefs: {json.dumps(cleaned_current_beliefs, indent=2)}
+                - Belief History: {json.dumps(pruned_belief_history, indent=2)}
 
                 SLOT MATCHING RULES:
                 1. Look for semantic matches between slot names and belief keys, not just exact matches
                 2. Consider variations and synonyms (e.g., "number_of_passengers" matches "number_of_people", "passengers", "people_count")
                 3. Look for related concepts (e.g., "departure_city" matches "origin", "from_city", "starting_location")
                 4. Consider plural/singular forms and compound words (e.g., "departure_date" matches "departure", "date", "departuredate")
+                5. Check both current beliefs and belief history for values
+                6. Use the most recent value when multiple matches are found
 
                 A slot is considered "filled" if:
-                - It has an exact match in the beliefs
-                - It has a semantic match in the beliefs
+                - It has an exact match in the current beliefs
+                - It has a semantic match in the current beliefs
+                - It has a match in the belief history
                 - The value is not null, empty, or undefined
-                - If a slot is in the "slots" dictionary with a value, it should NOT be in the "missing_slots" list
-
-                Examples of valid matches:
-                - If slot is "number_of_passengers" and belief has "number_of_people" with value "2", the slot is filled
-                - If slot is "departure_city" and belief has "origin" with value "New York", the slot is filled
-                - If slot is "return_date" and belief has "end_date" with value "2025-05-01", the slot is filled
+                - The value is in the correct format for the slot type
 
                 RESPONSE FORMAT:
                 Return a JSON object with these fields:
@@ -1026,10 +1046,44 @@ class AgentCore:
                 }}
 
                 HUMAN PROMPT RULES:
-                1. If complete=true: Use a variation of "We have all the data that we need"
-                2. If complete=false: Use a variation of "We still need: [list of missing slots]"
+                1. If complete=true: 
+                   - Acknowledge the information received
+                   - Confirm readiness to proceed
+                   - Example: "Great! I have all the information I need to proceed with your reservation. Would you like me to confirm the details?"
+                
+                2. If complete=false:
+                   - Acknowledge what information you already have
+                   - Ask for missing information in a conversational way
+                   - Use natural transitions
+                   - Examples:
+                     * "Thanks for providing the date and number of guests. Could you also let me know what time you'd like to make the reservation for?"
+                     * "I see you want to book a flight to Paris. I have your departure city, but could you tell me when you'd like to travel?"
+                     * "I've got your name and contact information. To complete your profile, could you share your preferred payment method?"
+                
                 3. Never say "We have all the data" if there are missing slots
-                4. Clearly indicate what information is still needed
+                
+                4. When asking for missing information:
+                   - Be specific about what's missing
+                   - Provide context for why you need it
+                   - Make it feel like a natural conversation
+                   - Examples:
+                     * "I have your arrival date, but I'll need to know your preferred check-in time to ensure we have your room ready."
+                     * "To help you find the best flight options, could you tell me your preferred departure time?"
+                
+                5. When acknowledging filled slots:
+                   - Show understanding of the information provided
+                   - Connect it to the overall goal
+                   - Examples:
+                     * "I see you're planning a trip to Tokyo in December. That's a great time to visit!"
+                     * "Perfect, I've got your party size of 4 people. Now, could you tell me your preferred seating area?"
+                
+                6. General tone guidelines:
+                   - Be friendly and helpful
+                   - Show understanding of the user's needs
+                   - Make the conversation flow naturally
+                   - Avoid technical or robotic language
+                   - Use contractions (I've, you're, we'll, etc.)
+                   - Keep responses concise but warm
             """
         
             response = self.llm(prompt)
@@ -1042,21 +1096,21 @@ class AgentCore:
                 result = self.sanitize(result_raw)
                 
             except json.JSONDecodeError as e:
-                return {'success':False,'action':action,'input':{'slots':slots,'beliefs':beliefs},'output':str(e)}
+                return {'success':False,'action':action,'input':{'slots':action_details.get('slots', {}),'beliefs':cleaned_current_beliefs},'output':str(e)}
                 
         except Exception as e:
             print(f"Error in complete_slots: {e}")
-            return {'success':False,'action':action,'input':{'slots':slots,'beliefs':beliefs},'output':str(e)}
+            return {'success':False,'action':action,'input':{'slots':action_details.get('slots', {}),'beliefs':cleaned_current_beliefs},'output':str(e)}
         
         self.print_chat(result,'json')
         self.print_chat(result['human_prompt'],'text')
         
-        next = 'form_intention'
+        next = 'form_intention' if result.get('complete', False) else 'finishing'
         
-        return {'success':True,'action':action,'next':next,'input':{'slots':slots,'beliefs':beliefs},'output':result}
+        return {'success':True,'action':action,'next':next,'input':{'action':current_action,'slots':action_details.get('slots', {}),'beliefs':cleaned_current_beliefs,'belief_history':pruned_belief_history},'output':result}
         
     
-    #NOT USED YET
+    
     # Intention Formation (Planning)
     def form_intention(self):
         
@@ -1082,7 +1136,8 @@ class AgentCore:
             if 'handler' in a:
                 list_handlers[a['key']] = a['handler']
             
-            # Using the loop to extract the examples of the current action       
+            # Using the loop to extract the examples of the current action  
+            examples = ''     
             if a['key'] == self._get_context().action:
                 if 'tools_reference' in a:
                     examples = a['tools_reference']
@@ -1109,7 +1164,6 @@ class AgentCore:
         {self._get_context().desire}
 
         ### Action Examples:
-        # TO-DO: Add field name to 'examples'
         {examples}
 
         ### Available Tools:
@@ -1160,10 +1214,10 @@ class AgentCore:
     def execute_intention(self):
         
         action = 'execute_intention'
+        self.print_chat(f"Reached execute_intention",'text') 
     
         """Execute the current intention and return standardized response"""
-        #try:
-        if True:
+        try:
         
             # Get current intention
             intention = self._get_context().plan
@@ -1186,18 +1240,40 @@ class AgentCore:
             print(f"Selected tool: {tool_name}")
             print(f"Reasoning: {reasoning}")
             print(f"Parameters: {params}")
-        
+            
         
             list_handlers = self._get_context().list_handlers
             
+            # Check if handler exists
             if tool_name not in list_handlers:
                 error_msg = f"❌ No handler found for tool '{tool_name}'"
                 print(error_msg)
                 self.print_chat(error_msg, 'text')
                 raise ValueError(error_msg)
+            
+            # Check if handler is an empty string
+            if list_handlers[tool_name] == '':
+                error_msg = f"❌ Handler is empty"
+                print(error_msg)
+                self.print_chat(error_msg, 'text')
+                raise ValueError(error_msg)
                 
-            self.print_chat(f'Calling {list_handlers[tool_name]} ','text') 
-            result = self.SHC.direct_run(list_handlers[tool_name], params)
+            # Check if handler has the right format
+            handler_route = list_handlers[tool_name]
+            parts = handler_route.split('/')
+            if len(parts) != 2:
+                error_msg = f"❌ {tool_name} is not a valid tool."
+                print(error_msg)
+                self.print_chat(error_msg, 'text')
+                raise ValueError(error_msg)
+            
+
+            portfolio = self._get_context().portfolio
+            org = self._get_context().org
+  
+            self.print_chat(f'Calling {handler_route} ','text') 
+            #result = self.SHC.direct_run(handler_route, params)
+            result = self.SHC.handler_call(portfolio,org,parts[0],parts[1],params)
             
             self.print_chat(result,'json')
             
@@ -1214,8 +1290,8 @@ class AgentCore:
             
             return execution_result
                     
-        #except Exception as e:
-        else:
+        except Exception as e:
+
             error_msg = f"❌ Execute Intention failed: '{tool_name}': {str(e)}"
             self.print_chat(error_msg,'text') 
             print(error_msg)
@@ -1235,48 +1311,90 @@ class AgentCore:
     
     ## Reflection and Adaptive Replanning
     def reflect_on_success(self) -> str:
-        prompt = f"""
-        You are a reflection module inside a BDI agent.
-
-        The previous intention (plan) succeeded during execution. Figure out if the goal has been achieved yet or we need to form more intentions.
-
-        ### Current Action:
-        {self._get_context().action}
-
-        ### Desired Outcome:
-        {self._get_context().desire}
         
-        ### Available Information:
-        {json.dumps(self._get_context().belief, indent=2)}
- 
+        action = 'reflected_on_success'
+        
+        try:
+            prompt = f"""
+            You are a reflection module inside a BDI agent.
 
-        Return a short analysis and advice for next steps.
-        """
-        reflection = self.llm(prompt).strip()
-        print(f"🧠 Reflection:\n{reflection}\n")
-        self.print_chat(f"🧠 Reflection:\n{reflection}\n",'text') 
-        return reflection
+            The previous intention (plan) succeeded during execution. Figure out if the goal has been achieved yet or we need to form more intentions.
+
+            ### Current Action:
+            {self._get_context().action}
+
+            ### Desired Outcome:
+            {self._get_context().desire}
+            
+            ### Plan
+            {json.dumps(self._get_context().plan, indent=2)}
+            
+            ### Available Information:
+            {json.dumps(self._get_context().belief, indent=2)}
+    
+
+            Return a short analysis and advice for next steps.
+            """
+            
+            input ={
+                'intention':self._get_context().plan,
+                'belief':self._get_context().belief,
+                'desire':self._get_context().desire,
+                'action':self._get_context().action,
+                }
+            
+            reflection = self.llm(prompt).strip()
+            print(f"🧠 Reflection:\n{reflection}\n")
+            self.print_chat(f"🧠 Reflection:\n{reflection}\n",'text') 
+            
+            next = 'finishing'
+            return {'success':True,'action':action,'next':next,'input':input,'output':reflection}
+        
+        except Exception as e:
+            next = 'finishing'
+            return {'success':False,'action':action,'next':next,'input':input,'output':e}
+        
+        
     
     
     ## Reflection and Adaptive Replanning
     def reflect_on_failure(self) -> str:
-        prompt = f"""
-        You are a reflection module inside a BDI agent.
+        
+        action = 'reflect_on_failure'
+        
+        
+        try:
+            
+            error = str(self._get_context().execute_intention_error)
+            
+            prompt = f"""
+            You are a reflection module inside a BDI agent.
 
-        The previous intention (plan) failed during execution. Analyze what went wrong, and suggest what to adjust in future planning.
+            The previous intention (plan) failed during execution. Analyze what went wrong, and suggest what to adjust in future planning.
 
-        ### Plan:
-        {json.dumps(self._get_context().plan, indent=2)}
+            ### Plan:
+            {json.dumps(self._get_context().plan, indent=2)}
 
-        ### Error:
-        {str(self._get_context().execute_intention_error)}
+            ### Error:
+            {error}
 
-        Return a short analysis and advice for replanning.
-        """
-        reflection = self.llm(prompt).strip()
-        print(f"🧠 Reflection:\n{reflection}\n")
-        #self.print_chat(f"🧠 Reflection:\n{reflection}\n",'text') 
-        return reflection
+            Return a short analysis and advice for replanning.
+            """
+            
+            input ={'intention':self._get_context().plan,'error':error}
+            
+            reflection = self.llm(prompt).strip()
+            print(f"🧠 Reflection:\n{reflection}\n")
+            self.print_chat(f"🧠❌ Reflection:\n{reflection}\n",'text') 
+            
+            next = 'finishing'
+            return {'success':True,'action':action,'next':next,'input':input,'output':reflection}
+                   
+        except Exception as e:
+            next = 'finishing'
+            return {'success':False,'action':action,'next':next,'input':input,'output':e}
+        
+        
     
         
     
@@ -1465,7 +1583,206 @@ class AgentCore:
             return {'success':False,'action':action,'input':act}
     
     
-    
+    def process_message(self, message, last_belief=None, belief_history=None):
+        """
+        Combined function that processes a message through multiple stages in a single LLM call:
+        1. Perception and interpretation
+        2. Information processing
+        3. Fact extraction
+        4. Desire detection
+        5. Action matching
+        """
+        action = 'process_message'
+        self.print_chat('Processing message through multiple stages...', 'text')
+        
+        # Get current time and date
+        current_time = datetime.now().strftime("%Y-%m-%d")
+        
+        # Get available actions
+        actions = self.DAC.get_a_b(self._get_context().portfolio, self._get_context().org, 'schd_actions')
+        list_actions = {}
+        for a in actions['items']:
+            list_actions[a['key']] = {
+                'goal': a['goal'],
+                'name': a['name'],
+                'utterances': a['utterances'],
+                'slots': a['slots']
+            }
+        
+        # Get current workspace action
+        workspace = self.get_active_workspace()
+        current_action = workspace.get('state', {}).get('action', '') if workspace else ''
+        
+        # Clean and prepare belief history if provided
+        cleaned_belief_history = self.sanitize(belief_history) if belief_history else []
+        pruned_belief_history = self.prune_history(cleaned_belief_history) if cleaned_belief_history else []
+        
+        prompt = f"""
+        You are a comprehensive message processing module for a BDI agent. Your task is to process a user message through multiple stages in a single pass.
+
+        STAGE 1 - PERCEPTION AND INTERPRETATION:
+        Extract structured information from the raw message:
+        - Identify the user's intent
+        - Extract key entities mentioned
+        - Note any tools that might be needed
+        - For each entity detected, create a belief history entry with:
+          * type: "belief"
+          * key: entity name
+          * val: entity value
+          * time: current timestamp
+
+        STAGE 2 - INFORMATION PROCESSING:
+        Enrich and normalize the extracted information:
+        - Normalize values (e.g., convert "tomorrow" to full date)
+        - Add derived information
+        - Validate and standardize formats
+        - Compare available beliefs with the slots required by the matched action
+        - Identify missing beliefs by:
+          * Checking each required slot from the matched action
+          * Verifying if we have corresponding values in current beliefs
+          * Considering both exact matches and semantic equivalents
+          * Including slots that are required but not yet provided
+        - Track missing beliefs that are essential for completing the current task
+
+        STAGE 3 - FACT EXTRACTION:
+        From the belief history, extract the most up-to-date facts:
+        - Use the most recent value for each key
+        - Combine with newly extracted information
+        - Maintain chronological order
+
+        STAGE 4 - DESIRE DETECTION:
+        Analyze the combined information to determine the user's goal:
+        - Consider the current action: {current_action}
+        - Review the entire belief history to understand the ongoing conversation context
+        - Consider the chronological progression of user's statements and preferences
+        - Only change the previously detected desire if:
+          * The new message explicitly states a different intention
+          * The new message provides critical information that fundamentally changes the goal
+          * The user explicitly requests to change their previous intention
+        - If the new message only adds facts without changing intent, maintain the previous desire
+        - Summarize the user's desire in a natural language sentence
+        - Focus on the primary objective that has been consistent throughout the conversation
+
+        STAGE 5 - ACTION MATCHING:
+        Match the processed information with available actions:
+        - Consider the current action: {current_action}
+        - Only change the current action if:
+          * The new message explicitly requests a different action
+          * The new message's intent clearly conflicts with the current action
+          * The user explicitly states they want to do something else
+        - If the new message only adds information without changing intent:
+          * Keep the current action
+          * Use the message to fill missing slots
+          * Update any relevant beliefs
+        - Compare intent and beliefs with action descriptions
+        - Consider the full belief history when matching
+        - Select the most appropriate action
+        - Provide confidence score
+
+        Today's date is {current_time}
+
+        ### Available Actions:
+        {json.dumps(list_actions, indent=2)}
+
+        ### Current Belief:
+        {json.dumps(last_belief, indent=2) if last_belief else "{}"}
+
+        ### Belief History:
+        {json.dumps(pruned_belief_history, indent=2) if pruned_belief_history else "[]"}
+
+        ### User Message:
+        {message}
+
+        Return a JSON object with the following structure:
+        {{
+            "perception": {{
+                "intent": "string",
+                "entities": {{}},
+                "raw_text": "string",
+                "needs_tools": []
+            }},
+            "processed_info": {{
+                "enriched_entities": {{}},
+                "missing_beliefs": [],
+                "normalized_values": {{}}
+            }},
+            "facts": {{
+                // Key-value pairs of extracted facts
+            }},
+            "desire": "string",
+            "action_match": {{
+                "confidence": 0-100,
+                "action": "string",
+                "reasoning": "string",
+                "action_changed": boolean,
+                "change_reason": "string"
+            }},
+            "belief_history_updates": [
+                {{
+                    "type": "belief",
+                    "key": "string",
+                    "val": "any",
+                    "time": "ISO timestamp"
+                }}
+            ]
+        }}
+
+        IMPORTANT RULES:
+        1. Always use the most recent value for each fact
+        2. Maintain all original information while enriching it
+        3. Provide clear reasoning for action matching
+        4. Return valid JSON with all strings properly quoted
+        5. For each new entity detected, create a belief history entry
+        6. Use the belief history to inform action matching
+        7. Include timestamps in ISO format for belief history entries
+        8. Consider historical context when matching actions
+        9. Only change the current action when explicitly requested or necessary
+        10. Use new information to fill missing slots in the current action
+        """
+        
+        try:
+            response = self.llm(prompt)
+            print(f'PROCESS MESSAGE PROMPT >> {prompt}')
+            result = self.clean_json_response(response)
+            sanitized_result = self.sanitize(result)
+            
+            # Update workspace with the results
+            if 'facts' in sanitized_result:
+                self.mutate_workspace({'belief': sanitized_result['facts']})
+            
+            if 'desire' in sanitized_result:
+                self.mutate_workspace({'desire': sanitized_result['desire']})
+            
+            if 'action_match' in sanitized_result and 'action' in sanitized_result['action_match']:
+                self.mutate_workspace({'action': sanitized_result['action_match']['action']})
+            
+            # Update belief history with new entities
+            if 'belief_history_updates' in sanitized_result:
+                for update in sanitized_result['belief_history_updates']:
+                    self.mutate_workspace({'belief_history': {update['key']: update['val']}})
+            
+            self.print_chat(sanitized_result, 'json')
+            #next = 'complete_slots' if sanitized_result.get('action_match', {}).get('confidence', 0) > 80 else 'finishing' ## Eliminate this
+            next = 'complete_slots'
+            
+            return {
+                'success': True,
+                'action': action,
+                'next': next,
+                'input': message,
+                'output': sanitized_result
+            }
+            
+        except json.JSONDecodeError as e:
+            print(f"Error parsing LLM response in process_message: {e}")
+            print(f"Raw response: {response}")
+            return {
+                'success': False,
+                'action': action,
+                'next': 'finishing',
+                'input': message,
+                'output': str(e)
+            }
     
   
     
@@ -1493,7 +1810,7 @@ class AgentCore:
         self._set_context(context)
             
         results = []
-        action = 'agent_actions'
+        action = 'run'
         print(f'Running: {action}')
         
         print(f'Payload: {payload}')   
@@ -1504,20 +1821,29 @@ class AgentCore:
             results.append(response_0)
             if not response_0['success']: 
                 return {'success':False,'action':action,'output':results}
-            next_step = 'perception_and_interpretation'
-                
             
             # Get the latest workspace and make it available via the context
             workspace = self.get_active_workspace() 
             self._update_context(workspace=workspace)
             
-            # Check if there is a follow up item pending.
+            # Check if there is a follow up item pending
             last_belief = {}
+            belief_history = []
             if workspace:    
                 if workspace.get('state', {}).get('follow_up', {}).get('expected', False):
                     next_step = 'confirm_action'
                 if workspace.get('state', {}).get('belief', {}):
                     last_belief = workspace['state']['belief']
+                if workspace.get('state', {}).get('history', []):
+                    belief_history = workspace['state']['history']
+            
+            # Process the message through all stages in one call
+            response_1 = self.process_message(payload['data'], last_belief, belief_history)
+            results.append(response_1)
+            if not response_1['success']:
+                return {'success':False,'action':action,'output':results}
+            
+            next_step = response_1['next']
             
             # Add protection against infinite loops
             MAX_ITERATIONS = 10  # Maximum number of steps allowed
@@ -1544,49 +1870,6 @@ class AgentCore:
                 previous_steps.add(next_step)
                 print(f"Step {step_counter}: {next_step}")
                 
-                if next_step == 'perception_and_interpretation':
-                    # Perception and Interpretation
-                    response_1 = self.perception_and_interpretation(payload['data'],last_belief)
-                    results.append(response_1)
-                    if not response_1['success']: 
-                        return {'success':False,'action':action,'output':results} 
-                    next_step = 'process_information'
-                    continue
-
-                if next_step == 'process_information':            
-                    # Process Information
-                    response_2 = self.process_information(response_1['output'])
-                    results.append(response_2)
-                    if not response_2['success']: 
-                        return {'success':False,'action':action,'output':results}
-                    next_step = 'reasoning'
-                    continue
-                    
-                if next_step == 'reasoning': 
-                    # Reasoning 
-                    response_3 = self.reasoning()
-                    results.append(response_3)
-                    if not response_3['success']: 
-                        return {'success':False,'action':action,'output':results}
-                    next_step = response_3['next']
-                    continue
-                
-                
-                '''
-                #NOT USED
-                  if next_step == 'confirm_action': 
-                    response_4 = self.confirm_action(payload['data'])
-                    results.append(response_4)
-                    if not response_4['success']: 
-                        return {'success':False,'action':action,'output':results}
-                    
-                    if response_4['output']['status']=='valid':
-                        next_step = 'complete_slots'
-                    else:
-                        next_step = 'perception_and_interpretation'
-                    continue'''
-                        
-                
                 if next_step == 'complete_slots':
                     response_5 = self.complete_slots()
                     results.append(response_5)
@@ -1595,18 +1878,15 @@ class AgentCore:
                     next_step = response_5['next']
                     continue
                     
-                # Planning the next step only
                 if next_step == 'form_intention':
                     response_6 = self.form_intention()
                     results.append(response_6)
                     if not response_6['success']: 
                         return {'success':False,'action':action,'output':results}
-                    next_step = 'execute_intention'
-                    #next_step = response_6['next'] 
+                    next_step = response_6['next'] 
                     continue
                     
-                if next_step == 'execute_intention': 
-                    self.print_chat(f"Reached execute_intention",'text') 
+                if next_step == 'execute_intention':  
                     response_7 = self.execute_intention()
                     results.append(response_7)
                     if not response_7['success']: 
@@ -1620,7 +1900,7 @@ class AgentCore:
                     results.append(response_8)
                     if not response_8['success']: 
                         return {'success':False,'action':action,'output':results}
-                    next_step = 'finishing'
+                    next_step = response_8['next']
                     continue
                
                 if next_step == 'reflect_on_failure':
@@ -1628,7 +1908,7 @@ class AgentCore:
                     results.append(response_9)
                     if not response_9['success']: 
                         return {'success':False,'action':action,'output':results}
-                    next_step = 'finishing'
+                    next_step = response_9['next']
                     continue
                 
                 if next_step == 'finishing': 
@@ -1643,12 +1923,12 @@ class AgentCore:
             self.print_chat(f'🤖','text')
             
             #All went well, report back
-            return {'success':True,'action':action,'message':'run completed','output':results}
-            
+            return {'success':True,'action':action,'message':'Run completed','output':results}
+         
         except Exception as e:
-            return {'success':False,'action':action,'message':str(e),'output':results}
-        
-          
+            return {'success':False,'action':action,'message':f'Run failed. Error:{str(e)}','output':results}
+
+    
 
 # Test block
 if __name__ == '__main__':

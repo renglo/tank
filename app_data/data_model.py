@@ -348,6 +348,10 @@ class DataModel:
                 'Limit': query['limit'],
                 "ScanIndexForward": False if query['sort'] == 'asc' else True
             }
+            
+            print(f'portfolio_index >>> {portfolio_index}')
+            print(f'path_index >>> {path_index}')
+            print(f'QUERY PARAMS >>> {query_params}')
 
             # Add the ExclusiveStartKey to the query parameters if provided (for pagination)
             if query['lastkey']:
