@@ -675,10 +675,10 @@ class AgentCore:
         list_actions = {}
         for a in actions['items']:
             list_actions[a['key']] = {
-                'goal':a['goal'],
-                'name':a['name'],
-                'utterances':a['utterances'],
-                'slots':a['slots']
+                'goal':a.get('goal', ''),
+                'name':a.get('name', ''),
+                'utterances':a.get('utterances', ''),
+                'slots':a.get('slots', '')
             }
             
         prompt = f"""
@@ -1118,19 +1118,27 @@ class AgentCore:
         
         self.print_chat('Deciding next step...','text')
         
-        actions = self.DAC.get_a_b(self._get_context().portfolio, self._get_context().org, 'schd_actions')
+        # Get current workspace
+        workspace = self.get_active_workspace()
+        current_action = workspace.get('state', {}).get('action', '') if workspace else ''
+        current_beliefs = workspace.get('state', {}).get('beliefs', {}) if workspace else {}
+        current_desire = workspace.get('state', {}).get('desire', '') if workspace else ''
+        
+        current_beliefs = self.sanitize(current_beliefs)
+        
+        tools = self.DAC.get_a_b(self._get_context().portfolio, self._get_context().org, 'schd_tools')
         
         #REPEATED CODE  (We already did this in match_action)
         # The difference is that in match_action() we did it to infer the current action. 
         # While in form_intention() we do it to infer the next action.
-        list_actions = {}
+        list_tools = {}
         list_handlers = {}
-        for a in actions['items']:
-            list_actions[a['key']] = {
-                'goal':a['goal'],
-                'name':a['name'],
-                'utterances':a['utterances'],
-                'slots':a['slots']
+        for a in tools['items']:
+            list_tools[a.get('key', '')] = {
+                'key':a.get('key', ''),
+                'goal':a.get('goal', ''),
+                'instructions':a.get('instructions', ''),
+                'input':a.get('input', '')
             } 
             
             if 'handler' in a:
@@ -1138,11 +1146,12 @@ class AgentCore:
             
             # Using the loop to extract the examples of the current action  
             examples = ''     
-            if a['key'] == self._get_context().action:
+            if a['key'] == current_action:
                 if 'tools_reference' in a:
                     examples = a['tools_reference']
             
         # Store list_handlers in context
+        inputs = {'belief':current_beliefs,'desire':current_desire,'action':current_action}
         self._update_context(list_handlers=list_handlers)
         
         prompt = f"""
@@ -1153,30 +1162,30 @@ class AgentCore:
         2. The available information (beliefs)
         3. The desired outcome
         4. Previous examples of how this action was executed
+        
+        ### Available Tools:
+        {json.dumps(list_tools, indent=2)}
 
         ### Current Action:
-        {self._get_context().action}
+        {current_action or 'No action selected'}
 
         ### Available Information:
-        {json.dumps(self._get_context().belief, indent=2)}
+        {json.dumps(current_beliefs, indent=2)}
 
         ### Desired Outcome:
-        {self._get_context().desire}
+        {current_desire or 'No desired outcome specified'}
 
         ### Action Examples:
-        {examples}
-
-        ### Available Tools:
-        {json.dumps(list_actions)}
+        {examples or 'No examples available'}
 
         Return a JSON object with:
         {{
-            "tool": "name_of_selected_tool",
+            "tool": "key_of_the_next_tool_to_use",
             "params": {{
                 // Parameters needed for the tool
                 // Use values from the available information when possible
             }},
-            "reasoning": "Brief explanation of why this tool was selected"
+            "reasoning": "Brief explanation of why this tool was selected as the next step"
         }}
 
         IMPORTANT:
@@ -1194,19 +1203,19 @@ class AgentCore:
             self.print_chat(response,'json')
             self.print_chat(response['reasoning'],'text')
             
-            if response['tool'] not in list_actions:
+            if response['tool'] not in list_tools:
                 next = 'finishing'
-                return {'success':False,'action':action,'next':next,'input':inputs,'output':e}
-                
-             
-            inputs = {'belief':self._get_context().belief,'desire':self._get_context().desire,'action':self._get_context().action}
-            next = 'execute_intention'  
+                return {'success':False,'action':action,'next':next,'input':inputs,'output':'No tool'}
+
+            next = 'execute_intention' 
+            #next = 'finishing' 
             return {'success':True,'action':action,'next':next,'input':inputs,'output':response}
             
-        except json.JSONDecodeError as e:         
+        except json.JSONDecodeError as e: 
+                 
             print(f"Error parsing LLM response in form_intention: {e}")
             next = 'finishing'
-            return {'success':False,'action':action,'next':next,'input':inputs,'output':e}
+            return {'success':False,'action':action,'next':next,'input':'','output':e}
     
     
 
@@ -1603,10 +1612,10 @@ class AgentCore:
         list_actions = {}
         for a in actions['items']:
             list_actions[a['key']] = {
-                'goal': a['goal'],
-                'name': a['name'],
-                'utterances': a['utterances'],
-                'slots': a['slots']
+                'goal': a.get('goal', ''),
+                'name': a.get('name', ''),
+                'utterances': a.get('utterances', ''),
+                'slots': a.get('slots', '')
             }
         
         # Get current workspace action
