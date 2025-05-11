@@ -201,7 +201,8 @@ def direct_run(tool,handler):
     current_app.logger.info('Running: '+tool+'/'+handler)
     handler_route = tool+'/'+handler
     
-    payload = request.get_json() 
+    payload = request.get_json()
+    payload['handler'] = handler_route
     response, status = SHC.direct_run(handler_route,payload)
     
     return jsonify(response), status
