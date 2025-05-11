@@ -159,6 +159,11 @@ While the symbolic link will be created, it will not work until you clone Tower 
 #### Step 8
 Installing Tower dependencies
 
+Go to the tower folder
+```
+cd ../tower
+```
+
 
 Run npm to install dependencies
 ```
@@ -177,7 +182,6 @@ Set the Configuration files
 You are going to create two new files in the tower root folder called .env.development and .env.production based on the .env.development.TEMPLATE and .env.production.TEMPLATE files as a starting point. 
 
 ```
-cd tower
 cp .env.development.TEMPLATE .env.development
 cp .env.production.TEMPLATE .env.production
 ```
@@ -282,7 +286,7 @@ Because the tools live outside the Tower repository, they don't share the librar
 You need to install the libraries used by the tools in the /tools folder. 
 
 ```
-cd tools
+cd ../tools
 npm install recharts
 npm install lucide-react
 ```
@@ -306,7 +310,7 @@ Create a file called `tsconfig.json` file and place it inside of /tools. The con
 Now, try running the build command again
 
 ```
-cd tower
+cd ../tower
 yarn build
 ```
 
