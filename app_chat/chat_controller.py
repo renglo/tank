@@ -238,7 +238,7 @@ class ChatController:
                 config = payload['config']
                 
             type = 'json'
-            if 'type' in payload and isinstance(payload['config'], str):
+            if 'type' in payload and isinstance(payload['type'], str):
                 type = payload['type']
             
             # CHANGE THIS TO FIT THE WORKSPACE SCHEMA

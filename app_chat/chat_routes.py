@@ -201,7 +201,8 @@ def chat_workspaces(entity_type,entity_id,thread_id):
     if request.method == 'GET':
         response = CHC.list_workspaces(entity_type,entity_id,thread_id)  
     elif request.method == 'POST':
-        response = CHC.create_workspace(entity_type,entity_id,thread_id,{}) 
+        payload = request.get_json()
+        response = CHC.create_workspace(entity_type,entity_id,thread_id,payload) 
         
         
     return response
