@@ -190,6 +190,7 @@ yarn build
 Now run 
 
 ```
+cd tank
 zappa deploy <environment_name>_<dev|test|prod>
 ```
 
@@ -230,7 +231,7 @@ VERY IMPORTANT: The value of the CNRECORD should not be the GATEWAY URL but the 
 
 - To get the right value, go to API Gateway > Custom Domain Names 
 - Select the Custom Domain Name and look for "API Gateway domain name" copy and paste it as is
-- Create a CN record:
+- Go to Route53>Zones and Create a CNAME record:
 
 `NAME=<environment_name>`  `VALUE=<domain_name_api_id>.execute-api.<aws_region>.amazonaws.com>`
 
@@ -251,10 +252,10 @@ Route selection expression: $request.body.action
 IP address type: IPv4
 
 Step 2 > Routes
-Route key: <route>
+Route key:  chat_message
 
 Step 3 > Integrations
-Route key:  chat_message
+
 Integration type: HTTP
 Integration target: POST <integration_target>
 
@@ -267,8 +268,9 @@ Example: "https://abcdef1234.execute-api.us-east-1.amazonaws.com/something_prod_
 Step 4 > Stages
 Stage name: <environment>  (prod|dev)
 
-Once the API is saved. Click on the Rout called chat_message,  go to Integration Request tab and enter the following template
+Once the API is saved. Click on the Route called chat_message,  go to Integration Request tab and enter the following template
 
+Name: message_template
 ```
 #set($inputRoot = $input.path('$'))
 {

@@ -214,7 +214,7 @@ class SchdController:
         # We could store every call to the RPC as a document. The ring itself is the name of the blueprint. 
         tool, handler_name = payload['handler'].split('/')
         if tool != '_action':
-            blueprint = self.BPC.get_blueprint('irma',handler,'last')
+            blueprint = self.BPC.get_blueprint('irma',handler_name,'last')
         
             if 'fields' not in blueprint:
                 result.append({'success':False,'action':action,'handler':'','message':'No valid handler'}) 

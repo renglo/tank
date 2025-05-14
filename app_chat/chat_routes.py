@@ -196,13 +196,27 @@ def chat_messages(entity_type,entity_id,thread_id):
 @app_chat.route('<string:entity_type>/<string:entity_id>/<string:thread_id>/workspaces', methods=['GET','POST'])
 @cognito_auth_required
 def chat_workspaces(entity_type,entity_id,thread_id):
-    
-    
+      
     if request.method == 'GET':
         response = CHC.list_workspaces(entity_type,entity_id,thread_id)  
     elif request.method == 'POST':
-        response = CHC.create_workspace(entity_type,entity_id,thread_id,{}) 
-        
+        payload = request.get_json()
+        response = CHC.create_workspace(entity_type,entity_id,thread_id,payload) 
+              
+    return response
+
+
+
+# Mutate the Workspace
+@app_chat.route('<string:entity_type>/<string:entity_id>/<string:thread_id>/workspaces/<string:workspace_id>', methods=['GET','PUT'])
+@cognito_auth_required
+def chat_one_workspace(entity_type,entity_id,thread_id,workspace_id):
+    
+    if request.method == 'GET':
+        response = CHC.get_workspace(entity_type,entity_id,thread_id,workspace_id)  
+    elif request.method == 'PUT':
+        payload = request.get_json()
+        response = CHC.update_workspace(entity_type,entity_id,thread_id,workspace_id,payload) 
         
     return response
 
