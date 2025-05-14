@@ -274,14 +274,14 @@ class ChatController:
         
         try:
         
-            data = self.get_workspace(entity_type, entity_id, thread_id, workspace_id)
+            response_0 = self.get_workspace(entity_type, entity_id, thread_id, workspace_id)
             
             print('Updating the obtained workspace document...')
             
-            if not data['success']:
-                return data
+            if not response_0['success']:
+                return response_0
             
-            item = data['item']
+            item = response_0['item']
             changed = False
             
             if 'state' in payload:
@@ -289,7 +289,9 @@ class ChatController:
                 changed = True
                 
             if 'data' in item:
-                item['data'] = payload['data']
+                if 'data' not in item:
+                    item['data'] = []
+                item['data'].append(payload['data'])
                 changed = True
                 
             if changed:
@@ -302,7 +304,7 @@ class ChatController:
             current_app.logger.error(f"Error in update_workspace: {str(e)}")
             return {
                 "success": False,
-                "message": f"Error updating message: {str(e)}",
+                "message": f"Error updating workspace: {str(e)}",
                 "status": 500
             }
                 

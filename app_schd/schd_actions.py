@@ -1,4 +1,4 @@
-#
+#DEPRECATED
 from datetime import datetime
 
 from app_data.data_controller import DataController
