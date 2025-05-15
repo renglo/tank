@@ -154,7 +154,7 @@ class AgentCore:
             # Regenerate workspaces_list
             workspaces_list = self.CHC.list_workspaces(context.entity_type,context.entity_id,context.thread) 
 
-            print('WORKSPACES_LIST >>>>',workspaces_list) 
+            print('UPDATED WORKSPACES_LIST >>>>',workspaces_list) 
             
             
         if not context.workspace_id:
