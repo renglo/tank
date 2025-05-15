@@ -210,10 +210,7 @@ class AgentCore:
                 if isinstance(output, dict):
                     workspace['data'].append(output) # The inserted object goes to the last position            
             
-            if key == 'data_ovr':
-                if isinstance(output, list):
-                    workspace['data'] = output # Output overrides existing data
-                    
+            
             if key == 'is_active':
                 if isinstance(output, bool):
                     workspace['data'] = output # Output overrides existing data
