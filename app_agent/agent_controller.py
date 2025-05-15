@@ -4,7 +4,7 @@ class AgentController:
 
     def __init__(self,tid=None,ip=None):
         
-        self.AGC = AgentCore()
+        self.AGK = AgentCore()
 
     def triage(self,payload):
         
@@ -20,7 +20,7 @@ class AgentController:
         response = self.SHC.direct_run(handler, payload) # REPLACE THIS FOR THE TRIAGE. THE TRIAGE WILL USE SHC.direct_run once it determines what handler to use
         '''
         
-        result = self.AGC.run(payload) 
+        result = self.AGK.run(payload) 
         
         if 'success' in result and not result['success']:
             

@@ -243,6 +243,7 @@ class SchdController:
         
         print(f'Calling handler:{handler}, payload:{payload}')
         
+        #Augmenting the payload with portfolio, org and tool information
         payload['portfolio'] = portfolio
         payload['org'] = org
         payload['tool'] = tool
