@@ -291,7 +291,7 @@ class ChatController:
             if 'data' in payload:
                 if 'data' not in item:
                     item['data'] = []
-                item['data'].append(payload['data'])
+                item['data'] = payload['data']
                 changed = True
                 
             if changed:

@@ -5,12 +5,13 @@ from app_auth.login_required import login_required
 from flask_cognito import cognito_auth_required, current_user, current_cognito_jwt
 from app_chat.chat_controller import ChatController
 from app_agent.agent_controller import AgentController
-from app_agent.agent_core import AgentCore
+from app_auth.auth_controller import AuthController
 from functools import wraps
 import time
 import json
 import boto3
 from decimal import Decimal
+from datetime import datetime
 
 from env_config import WEBSOCKET_CONNECTIONS
 
@@ -24,8 +25,7 @@ app_chat = Blueprint('app_chat', __name__, url_prefix='/_chat')
 
 CHC = ChatController()
 AGC = AgentController()
-AGK = AgentCore()
-
+AUC = AuthController()
 
 
 def socket_auth_required(f):
@@ -226,8 +226,185 @@ def chat_one_workspace(entity_type,entity_id,thread_id,workspace_id):
 @app_chat.route('/tb', methods=['POST'])
 @cognito_auth_required
 def chat_tb():
+    
+    '''
+    Payload format
+    {
+      'action':'message',
+      'portfolio':<portfolio_id>,
+      'org':<org_id>,
+      'entity_type':<entity_type>,
+      'entity_id':<entity_id>,
+      'thread':<thread_id>,
+      'data': <raw_message>
+    }
+    '''
     payload = request.get_json()
-    response = AGK.run(payload) 
+    response = AGC.triage(payload)
+    
+    current_app.logger.debug('TRACE >>')
+    current_app.logger.debug(response)
+        
+    return response
+
+
+
+# PROTOTYPE FUNCTION. IT CONTAINS MANY HARDCODED DEPENDENCIES
+@app_chat.route('/gs_in/<string:portfolio>', methods=['POST'])
+@cognito_auth_required
+def gupshup_in(portfolio):
+    
+    
+    org_id = ''
+    entity_id = ''
+    thread_id = ''
+    
+    '''
+    EXAMPLE OF GUPSHUP INBOUND MESSAGE
+    It states that a customer has sent a message to your WhatsApp Business API phone number. 
+     
+        {   
+        "app": "DemoApp", 
+        "timestamp": 1580227766370,   
+        "version": 2, 
+        "type": "message",    
+        "payload": {  
+            "id": "ABEGkYaYVSEEAhAL3SLAWwHKeKrt6s3FKB0c",   
+            "source": "918x98xx21x4",   
+            "type": "text"|"image"|"file"|"audio"|"video"|"contact"|"location"|"button_reply"|"list_reply", 
+            "payload": {    
+            // Varies according to the type of payload.    
+            },  
+            "sender": { 
+            "phone": "918x98xx21x4",  
+            "name": "Drew",   
+            "country_code": "91", 
+            "dial_code": "8x98xx21x4" 
+            },  
+            "context": {    
+            "id": "gBEGkYaYVSEEAgnPFrOLcjkFjL8",  
+            "gsId": "9b71295f-f7af-4c1f-b2b4-31b4a4867bad"    
+            }   
+        } 
+        }
+    '''
+    
+    gupshup_payload = request.get_json()
+    
+    msg_content ='Reservation for 5 please' # This should be extracted from the gupshup_payload
+    msg_timestamp = gupshup_payload['payload']['timestamps']
+    msg_sender = gupshup_payload['payload']['source'] # This is the sender number
+
+
+    # The origin_number in the route will help you identify portfolio_id,
+    # The origin number will help you identify org_id if the number is unique for that org. 
+    # Otherwise, the agent would need to operate on a portfolio level to ask the user what org they are referring to. 
+    # The org selection needs to be stored somewhere for subsequent messages to be directed to the right org.
+    # At the beginning of the message processing, the agent will have to consult this memory to figure out what org the user is referring to. 
+    # entity_id if formed from three components: org (which we already inferred in the last step), tool (which we can acquire from the tree for this portfolio), section which is constant: 'wa'
+    # thread_id we can just use the most recent one. A new thread will be created automatically on the first message of the day. 
+    
+    
+    #IMPLEMENTATION STEPS:
+    
+    # Check that Portfolio sent in the callback url is legit.
+    
+    # Search for tools in this portfolio. The Woppi tool should be installed
+    tool_id = None
+    tools = AUC.list_entity('tool',{'portfolio_id':portfolio})
+    for tool in tools['document']['items']:
+        if tool['handle'] == 'woppi':  
+            tool_id = tool['_id']
+            break
+        
+    if not tool_id:
+        # If woppi is not installed return an error.
+        return False, 400
+
+    initialize_thread = False
+    # Getting all the orgs under the portfolio
+    orgs = AUC.list_entity('org',{'portfolio_id':portfolio}) 
+    for org_object in orgs['document']['items']:  
+        
+        # In every org, look for threads that are part of the portfolio and tool submitted by the sender 
+        entity_type = 'portfolio-tool-sender'
+        entity_id = f'{portfolio}-{tool_id}-{msg_sender}'
+        threads = CHC.list_threads(entity_type,entity_id) 
+        
+        '''
+        EXAMPLE , Threads
+        
+        {
+            "items": [
+                {
+                    "_id": "8fcdd1f4-7eb8-4720-875e-3058b96867af",
+                    "author_id": "9177697760",
+                    "entity_id": "5038a960fde7-ca1a009b27d8-9177697760",
+                    "entity_type": "portfolio-tool-sender",
+                    "index": "irn:chat:portfolio-tool-sender/thread:5038a960fde7-ca1a009b27d8-9177697760",
+                    "is_active": true,
+                    "language": "ES",
+                    "time": "1747404175.06456"
+                }
+            ],
+            "success": true
+        }
+        
+        '''
+        
+        if 'success' in threads: 
+            if len(threads['items'])<1:
+                # No threads found
+                # ACTION: Set flag to initialize a thread
+                
+            # Pick the last thread
+            last_thread = threads['items'][-1]
+            # For the thread to be valid. It needs to belong to the message sender number and be from today.
+            if last_thread['author_id'] == gupshup_payload['payload']['source']:
+                if datetime.fromtimestamp(float(last_thread['time'])).strftime('%Y-%m-%d') == datetime.fromtimestamp(float(msg_timestamp)/1000).strftime('%Y-%m-%d'):
+                    # This user has sent another message today already
+                    # Complete the input object and send message to triage . END
+                    # ACTION: Capture the message_thread and forward the message to the triage
+                    input = {
+                        'action':'message',
+                        'portfolio':portfolio,
+                        'org':org_object['_id'],
+                        'entity_type':entity_type,
+                        'entity_id':entity_id,
+                        'thread':last_thread['_id'],
+                        'data': raw_message
+                    }
+                        
+                    response = AGC.triage(input)
+                    initialize_thread = False
+                    break
+    
+                else:
+                    # This user has sent messages before but not today
+                    # ACTION: Set flag to initialize a thread
+                    initialize_thread = True
+            else:
+                # This user has not sent a message before
+                # ACTION: Set flag to initialize a thread
+                initialize_thread = True
+        
+                
+            
+    if initialize_thread:
+        
+        # 1. You need to ask the user what org they refer to. Provide a list of orgs from the portfolio.
+        
+        
+    
+    #2b. If not, then 
+    
+    
+
+    
+    
+
+     
+    
     
     current_app.logger.debug('TRACE >>')
     current_app.logger.debug(response)

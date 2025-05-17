@@ -524,24 +524,23 @@ class AuthController:
             return response
         
         
-        
-        else:
+        if(type =='org'):
+            index = 'irn:entity:portfolio/org:'+kwargs['portfolio_id']+'/*'
 
-            if(type =='org'):
-                index = 'irn:entity:portfolio/org:'+kwargs['portfolio_id']+'/*'
+        if(type =='team'):
+            index = 'irn:entity:portfolio/team:'+kwargs['portfolio_id']+'/*'
 
-            elif(type =='team'):
-                index = 'irn:entity:portfolio/team:'+kwargs['portfolio_id']+'/*'
+        if(type =='app'):         
+            index = 'irn:entity:team/app:'+kwargs['team_id']+'/*'
+            
+        if(type =='tool'):         
+            index = 'irn:entity:portfolio/tool:'+kwargs['portfolio_id']+'/*'   
 
-            elif(type =='app'):         
-                index = 'irn:entity:team/app:'+kwargs['team_id']+'/*'
- 
-            response = self.AUM.get_entity(index,id) 
+        response = self.AUM.list_entity(index) 
+        return response
 
 
 
-        
-    
 
 
     #TANK-FE
@@ -579,6 +578,11 @@ class AuthController:
             else:
                 missing = True
 
+        # The above code snippet is checking if the `type` is equal to 'tool' and if certain keys
+        # ('portfolio_id' and 'tool_id') are present in the `kwargs` dictionary. If both conditions
+        # are met, it sets the `index` variable to a specific value based on the 'portfolio_id' key,
+        # and assigns the value of the 'tool_id' key to the `id` variable. If the conditions are not
+        # met, it sets the `missing` variable to True.
         elif type == 'tool':
             if all(key in kwargs for key in ['portfolio_id','tool_id']):        
                 index = 'irn:entity:portfolio/tool:'+kwargs['portfolio_id']+'/*'

@@ -4,24 +4,26 @@ class AgentController:
 
     def __init__(self,tid=None,ip=None):
         
-        self.AGK = AgentCore()
+        self.AGK_1 = AgentCore()
 
-    def triage(self,payload):
+    def triage(self,payload,core_name='core_1'):
         
         action = 'triage'
 
-        #1. Get a list of all the available actions
-        #2. Compare the message with utterances from the actions in the list
-        #3. If you find a match, declare that action as the active action
+        # The triage exists because there can be many agent cores. 
+        # The triage will direct the call to the right agent
+        # A core is a specific way to implement an agent. 
+        # Different type of cores:
+        #   - Multiple LLM calls or a single optimized call.
+        #   - One shot or iterative attempts.
+        #   - With or without introspection.
+        #   - BDI, ReAct, hybrid or any different type of agent. 
         
-        '''
-        handler = 'x'
-        # Call handler   
-        response = self.SHC.direct_run(handler, payload) # REPLACE THIS FOR THE TRIAGE. THE TRIAGE WILL USE SHC.direct_run once it determines what handler to use
-        '''
-        
-        result = self.AGK.run(payload) 
-        
+        # At the moment we only have one kind of agent: core_1
+        result ={}
+        if core_name == 'core_1':
+            result = self.AGK_1.run(payload) 
+          
         if 'success' in result and not result['success']:
             
             return {'success':False,'action':action,'output':result,'status':400} 

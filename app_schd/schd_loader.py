@@ -4,18 +4,12 @@ import os
 import sys
 import gc
 
-from app_schd.schd_actions import SchdActions
-
 class SchdLoader:
     
     def __init__(self, module_path="handlers"):
         self.module_path = module_path
-        #self.OPG = OperateGame()
-        #self.modules = self.discover_modules()
-        self.SHK = SchdActions()
         
-        
-        
+  
         
     def convert_module_name_to_class(self,input_string):
         # Step 1: Split the string at '/'
