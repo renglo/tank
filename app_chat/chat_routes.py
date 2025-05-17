@@ -356,6 +356,7 @@ def gupshup_in(portfolio):
             if len(threads['items'])<1:
                 # No threads found
                 # ACTION: Set flag to initialize a thread
+                return False
                 
             # Pick the last thread
             last_thread = threads['items'][-1]
@@ -391,6 +392,8 @@ def gupshup_in(portfolio):
                 
             
     if initialize_thread:
+        
+        pass
         
         # 1. You need to ask the user what org they refer to. Provide a list of orgs from the portfolio.
         
