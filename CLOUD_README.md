@@ -227,7 +227,7 @@ Setup the API to accept custom domains
 
 Configure domain to point to API Gateway
 
-VERY IMPORTANT: The value of the CNRECORD should not be the GATEWAY URL but the CUSTOM DOMAIN URL. They look similar but they are not the same
+VERY IMPORTANT: The value of the CNAME should not be the GATEWAY URL but the CUSTOM DOMAIN URL. They look similar but they are not the same
 
 - To get the right value, go to API Gateway > Custom Domain Names 
 - Select the Custom Domain Name and look for "API Gateway domain name" copy and paste it as is
@@ -237,7 +237,9 @@ VERY IMPORTANT: The value of the CNRECORD should not be the GATEWAY URL but the 
 
 - Save that record and almost immediately you'll be able to see your app in that subdomain. 
 
-TROUBLESHOOT: If you find a blank screen, double check your tank and tower configuration files have the domain you just configured. 
+TROUBLESHOOT: 
+-If you find a blank screen, double check your tank and tower configuration files have the domain you just configured. 
+- If you are using Chrome, it won't work immediately even if you close the window, refresh everything. Try in another browser. Eventually, Chrome will consult the new DNS records and show you the page. 
 
 ### Step 7: Setting up the WebSocket API
 

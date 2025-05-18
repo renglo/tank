@@ -259,8 +259,6 @@ cp tools.json.TEMPLATE tools.json
 
 
 
-
-
 Build the FrontEnd
 Tank interacts with the Tower build not with its raw components. 
 The Tower build is a compiled version of the application that exists in  tower/dist 

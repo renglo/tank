@@ -70,15 +70,20 @@ class AgentCore:
         self.DCC = DocsController()
         self.CHC = ChatController()
         self.SHC = SchdController()
-        #self.SHL = SchdLoader() # If schd_actions was loaded by schd_loader, this will cause a circular dependency > ERROR
-              
+        
         
         self.AI_1 = openai_client
         #self.AI_1_MODEL = "gpt-4" // This model does not support json_object response format
         self.AI_1_MODEL = "gpt-3.5-turbo" # Baseline model. Good for multi-step chats
         self.AI_2_MODEL = "gpt-4o-mini" # This model is not very smart
         
-        self.apigw_client = boto3.client("apigatewaymanagementapi", endpoint_url=WEBSOCKET_CONNECTIONS)
+        try:
+        
+            self.apigw_client = boto3.client("apigatewaymanagementapi", endpoint_url=WEBSOCKET_CONNECTIONS)
+        
+        except Exception as e:
+            print(f"Error initializing WebSocket client: {e}")
+            self.apigw_client = None
         
         
         self.tools = ToolRegistry()
