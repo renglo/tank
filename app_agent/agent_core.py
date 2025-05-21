@@ -378,7 +378,8 @@ class AgentCore:
     
     
     
-    # 1
+    # 1 NOT USED, 
+    # Integrated into process_message()
     def perception_and_interpretation(self, message,last_belief):
         
         action = 'perception_and_interpretation'
@@ -462,7 +463,8 @@ class AgentCore:
     
     
     
-    # 2
+    # 2 NOT USED
+    # Integrated into process_message()
     def process_information(self, input):
         
         action = 'process_information'   
@@ -990,7 +992,9 @@ class AgentCore:
                 break
                 
         if not action_details:
-            return {'success': False, 'action': action, 'message': f'Action {current_action} not found in database'}
+            error_msg = f'Action: {current_action} not found in database'
+            self.print_chat(error_msg,'text')
+            return {'success': False, 'action': action, 'message': error_msg}
             
         # Get current beliefs and history
         current_beliefs = workspace.get('state', {}).get('beliefs', {})
@@ -1129,27 +1133,31 @@ class AgentCore:
         
         tools = self.DAC.get_a_b(self._get_context().portfolio, self._get_context().org, 'schd_tools')
         
-        #REPEATED CODE  (We already did this in match_action)
-        # The difference is that in match_action() we did it to infer the current action. 
-        # While in form_intention() we do it to infer the next action.
         list_tools = {}
         list_handlers = {}
-        for a in tools['items']:
-            list_tools[a.get('key', '')] = {
-                'key':a.get('key', ''),
-                'goal':a.get('goal', ''),
-                'instructions':a.get('instructions', ''),
-                'input':a.get('input', '')
+        for t in tools['items']:
+            list_tools[t.get('key', '')] = {
+                'key':t.get('key', ''),
+                'goal':t.get('goal', ''),
+                'instructions':t.get('instructions', ''),
+                'input':t.get('input', '')
             } 
             
-            if 'handler' in a:
-                list_handlers[a['key']] = a['handler']
             
-            # Using the loop to extract the examples of the current action  
-            examples = ''     
-            if a['key'] == current_action:
-                if 'tools_reference' in a:
-                    examples = a['tools_reference']
+          
+        # UNDER CONSTRUCTION
+        # I need to get the current action document and get the examples from it to show the agent
+        # how to create the plan. The example shows what tools can be used. 
+        # The current action is already in this variable: current_action . The issue is that such variable might contain 
+        # the name of the action instead of its key. Is this indexed? Yes, but 
+        
+        action_doc = self.load_action(current_action)
+            # Using the loop to extract the examples of the current tool  
+        examples = ''     
+        if 'examples' in action_doc:
+            examples = action_doc['tools_reference']
+                
+        # UNDER CONSTRUCTION ENDS
             
         # Store list_handlers in context
         inputs = {'belief':current_beliefs,'desire':current_desire,'action':current_action}
@@ -1614,7 +1622,7 @@ class AgentCore:
         for a in actions['items']:
             list_actions[a['key']] = {
                 'goal': a.get('goal', ''),
-                'name': a.get('name', ''),
+                'key': a.get('key', ''),
                 'utterances': a.get('utterances', ''),
                 'slots': a.get('slots', '')
             }
@@ -1722,7 +1730,7 @@ class AgentCore:
             "desire": "string",
             "action_match": {{
                 "confidence": 0-100,
-                "action": "string",
+                "action": "string" // Use the key of the action,
                 "reasoning": "string",
                 "action_changed": boolean,
                 "change_reason": "string"
@@ -1741,6 +1749,7 @@ class AgentCore:
         1. Always use the most recent value for each fact
         2. Maintain all original information while enriching it
         3. Provide clear reasoning for action matching
+        3b. Use the action key to indicate what action has been selected.
         4. Return valid JSON with all strings properly quoted
         5. For each new entity detected, create a belief history entry
         6. Use the belief history to inform action matching
@@ -1764,6 +1773,9 @@ class AgentCore:
                 self.mutate_workspace({'desire': sanitized_result['desire']})
             
             if 'action_match' in sanitized_result and 'action' in sanitized_result['action_match']:
+                # Check if action.key is used instead of action.name
+                
+                
                 self.mutate_workspace({'action': sanitized_result['action_match']['action']})
             
             # Update belief history with new entities
@@ -1933,7 +1945,7 @@ class AgentCore:
             self.print_chat(f'🤖','text')
             
             #All went well, report back
-            return {'success':True,'action':action,'message':'Run completed','output':results}
+            return {'success':True,'action':action,'message':'Run completed','input':payload,'output':results}
          
         except Exception as e:
             return {'success':False,'action':action,'message':f'Run failed. Error:{str(e)}','output':results}

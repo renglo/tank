@@ -107,15 +107,15 @@ def real_time_message():
             
             return {
                 'statusCode': 200,
-                'body': json.dumps(response_body, cls=DecimalEncoder)
-                
+                'body': response_body
+                #'body': json.dumps(response_body, cls=DecimalEncoder)      
             }
         except Exception as e:
             current_app.logger.error(f"Error handling response: {str(e)}")
             return {
                 'statusCode': 500,
                 'body': json.dumps({
-                    'error': 'Internal server error',
+                    'error': 'Internal server error (a)',
                     'details': str(e)
                 })
             }
@@ -126,11 +126,11 @@ def real_time_message():
             return {
                 'statusCode': 500,
                 'body': json.dumps({
-                    'error': 'Internal server error',
+                    'error': 'Internal server error (b)',
                     'details': str(e)
                 })
             }
-        return jsonify({'error': 'Internal server error (654)', 'details': str(e)}), 500
+        return jsonify({'error': 'Internal server error (c)', 'details': str(e)}), 500
     
 
 
@@ -230,7 +230,7 @@ def chat_tb():
     '''
     Payload format
     {
-      'action':'message',
+      'action':'chat_message',
       'portfolio':<portfolio_id>,
       'org':<org_id>,
       'entity_type':<entity_type>,
@@ -367,7 +367,7 @@ def gupshup_in(portfolio):
                     # Complete the input object and send message to triage . END
                     # ACTION: Capture the message_thread and forward the message to the triage
                     input = {
-                        'action':'message',
+                        'action':'chat_message',
                         'portfolio':portfolio,
                         'org':org_object['_id'],
                         'entity_type':entity_type,

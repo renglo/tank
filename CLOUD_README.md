@@ -259,9 +259,15 @@ Route key:  chat_message
 Step 3 > Integrations
 
 Integration type: HTTP
-Integration target: POST <integration_target>
+Method: POST
+URL endpoint: <integration_target>
 
 NOTE >> The “integration_target_base” is the URL of the stage in the REST api (which was automatically created by Zappa) on deployment. 
+It is the same URL that appears when you deploy something with Zappa
+- a. Select the RESTful API in the API Gateway
+- b. Go to the Stages section
+- c. Look for the Invoke URL
+
 
 integration_target = integration_target_base + "/_chat/message"
 
@@ -276,12 +282,14 @@ Name: message_template
 ```
 #set($inputRoot = $input.path('$'))
 {
-  "handler": "$inputRoot.handler",
-  "portfolio": "$inputRoot.portfolio",
-  "org": "$inputRoot.org",
+  "action": "$inputRoot.action",
+  "data": "$inputRoot.data",
+  "auth": "$inputRoot.auth",
   "entity_type": "$inputRoot.entity_type",
   "entity_id": "$inputRoot.entity_id",
   "thread": "$inputRoot.thread",
+  "portfolio": "$inputRoot.portfolio",
+  "org": "$inputRoot.org",
   "connectionId": "$context.connectionId"
 }
 ```
@@ -302,7 +310,15 @@ python create_websocket_api.py x_prod_1234a_websocket "chat_message" "https://qw
 
 Enable two-way communication in the HTTP integration (this needs to be done manually)
 
+Go to the Stages section in the new WebSocket API (just created) and looks for:
 
+WebSocket URL and @connections URL . Copy them somewhere
+
+Open tank/env_config.py and paste the @connections URL in the constant called WEBSOCKET_CONNECTIONS without the "/@connections" part at the end. 
+
+Open tower/.env.production and tower/.env.development and paste the WebSocket URL as is
+
+IMPORTANT: Check that HTTP proxy integration Info is set to False
 
 
 

@@ -58,6 +58,7 @@ def create_iam_policy(env_name, cognito_user_pool_id, aws_region, aws_profile):
                 "Resource": [
                     f"arn:aws:dynamodb:{aws_region}:{aws_account_id}:table/{env_name}_blueprints",
                     f"arn:aws:dynamodb:{aws_region}:{aws_account_id}:table/{env_name}_data",
+                    f"arn:aws:dynamodb:{aws_region}:{aws_account_id}:table/{env_name}_chat",
                     f"arn:aws:dynamodb:{aws_region}:{aws_account_id}:table/{env_name}_entities",
                     f"arn:aws:dynamodb:{aws_region}:{aws_account_id}:table/{env_name}_rel",
                     f"arn:aws:dynamodb:{aws_region}:{aws_account_id}:table/{env_name}_data/index/path_index"
