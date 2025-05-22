@@ -215,9 +215,9 @@ def handler_call(portfolio,org,tool,handler):
     
     current_app.logger.info('Running: '+tool+'/'+handler)
     payload = request.get_json() 
-    response, status = SHC.handler_call(portfolio,org,tool,handler,payload)
+    response = SHC.handler_call(portfolio,org,tool,handler,payload)
     
-    return jsonify(response), status
+    return jsonify(response), 200
 
 
 

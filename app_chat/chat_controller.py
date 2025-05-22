@@ -139,28 +139,39 @@ class ChatController:
             }
         
         
+    def _convert_floats_to_strings(self, obj):
+        """
+        Recursively converts float values to strings in a dictionary or list structure.
+        """
+        if isinstance(obj, dict):
+            return {k: self._convert_floats_to_strings(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [self._convert_floats_to_strings(item) for item in obj]
+        elif isinstance(obj, float):
+            return str(obj)
+        return obj
+
     def update_message(self,entity_type, entity_id, thread_id, message_id, update):
         print(f'CHC:update_message {entity_type}/{thread_id}/{message_id}:{update}')
         try:
-        
             data = self.get_message(entity_type, entity_id, thread_id, message_id)
             
             if not data['success']:
                 return data
             
             item = data['item']
-                
             print(f'Document retrieved:{item}')
-            
             
             if 'output' not in item or not isinstance(item['output'], list):
                 item['output'] = []
-                
+            
+            # Convert any float values in the update to strings
+            update = self._convert_floats_to_strings(update)
             item['output'].append(update)
             
             current_app.logger.debug(f'Prepared data for chat update: {item}')
             response = self.CHM.update_chat(item)
-            print(response)
+            print(response) 
             return response
         
         except Exception as e:

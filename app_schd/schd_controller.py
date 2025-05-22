@@ -239,7 +239,7 @@ class SchdController:
            
         result = []
 
-        action = 'direct_run'
+        action = 'handler_call'
         
         print(f'Calling handler:{handler}, payload:{payload}')
         
@@ -257,11 +257,11 @@ class SchdController:
         
         if not response['success']:
             result.append({'success':False,'action':action,'handler':handler,'input':payload,'output':response})
-            return result, 400
+            return result
         
         result.append({'success':True,'action':action,'handler':handler,'input':payload,'output':response})
 
-        return result, 200
+        return result
     
  
     

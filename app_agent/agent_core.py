@@ -272,8 +272,11 @@ class AgentCore:
         elif isinstance(obj, Decimal):
             # Convert Decimal to int if it's a whole number, otherwise float
             return int(obj) if obj % 1 == 0 else float(obj)
-        elif isinstance(obj, (int, float)):
-            # Keep numbers as is - they will be handled properly by JSON serialization
+        elif isinstance(obj, float):
+            # Convert float to string
+            return str(obj)
+        elif isinstance(obj, int):
+            # Keep integers as is
             return obj
         else:
             return obj
@@ -1054,7 +1057,7 @@ class AgentCore:
                 1. If complete=true: 
                    - Acknowledge the information received
                    - Confirm readiness to proceed
-                   - Example: "Great! I have all the information I need to proceed with your reservation. Would you like me to confirm the details?"
+                   - Example: "Great! I have all the information I need to proceed with next steps."
                 
                 2. If complete=false:
                    - Acknowledge what information you already have
@@ -1134,7 +1137,7 @@ class AgentCore:
         tools = self.DAC.get_a_b(self._get_context().portfolio, self._get_context().org, 'schd_tools')
         
         list_tools = {}
-        list_handlers = {}
+        
         for t in tools['items']:
             list_tools[t.get('key', '')] = {
                 'key':t.get('key', ''),
@@ -1159,9 +1162,9 @@ class AgentCore:
                 
         # UNDER CONSTRUCTION ENDS
             
-        # Store list_handlers in context
+        
         inputs = {'belief':current_beliefs,'desire':current_desire,'action':current_action}
-        self._update_context(list_handlers=list_handlers)
+        
         
         prompt = f"""
         You are a tool selection module inside a BDI agent.
@@ -1233,6 +1236,14 @@ class AgentCore:
         
         action = 'execute_intention'
         self.print_chat(f"Reached execute_intention",'text') 
+        
+        tools = self.DAC.get_a_b(self._get_context().portfolio, self._get_context().org, 'schd_tools')
+        list_handlers = {}
+        for t in tools['items']:
+            list_handlers[t.get('key', '')] = t.get('handler', '')
+            
+        self._update_context(list_handlers=list_handlers)
+        
     
         """Execute the current intention and return standardized response"""
         try:
@@ -1260,7 +1271,7 @@ class AgentCore:
             print(f"Parameters: {params}")
             
         
-            list_handlers = self._get_context().list_handlers
+            #list_handlers = self._get_context().list_handlers
             
             # Check if handler exists
             if tool_name not in list_handlers:
@@ -1291,22 +1302,19 @@ class AgentCore:
   
             self.print_chat(f'Calling {handler_route} ','text') 
             #result = self.SHC.direct_run(handler_route, params)
-            result = self.SHC.handler_call(portfolio,org,parts[0],parts[1],params)
+            response = self.SHC.handler_call(portfolio,org,parts[0],parts[1],params)
             
-            self.print_chat(result,'json')
             
-            # Store results
-            execution_result = {
-                "success": True,
-                "action":action,
-                "input": intention,
-                "output": result
-            }
+            if 'success' not in response:
+                return {'success':False,'action':action,'input':params,'output':response}
             
-            self._update_context(execute_intention_results=execution_result)
+            # Results coming from the handler
+            self.print_chat(response,'json')
+            
+            self._update_context(execute_intention_results=response)
             print("✅ Tool execution complete.")
             
-            return execution_result
+            return {"success": True,"action":action,"input": intention,"output": response}
                     
         except Exception as e:
 
@@ -1362,8 +1370,8 @@ class AgentCore:
                 }
             
             reflection = self.llm(prompt).strip()
-            print(f"🧠 Reflection:\n{reflection}\n")
-            self.print_chat(f"🧠 Reflection:\n{reflection}\n",'text') 
+            #print(f"🧠 Reflection:\n{reflection}\n")
+            #self.print_chat(f"🧠 Reflection:\n{reflection}\n",'text') 
             
             next = 'finishing'
             return {'success':True,'action':action,'next':next,'input':input,'output':reflection}
@@ -1402,8 +1410,8 @@ class AgentCore:
             input ={'intention':self._get_context().plan,'error':error}
             
             reflection = self.llm(prompt).strip()
-            print(f"🧠 Reflection:\n{reflection}\n")
-            self.print_chat(f"🧠❌ Reflection:\n{reflection}\n",'text') 
+            #print(f"🧠 Reflection:\n{reflection}\n")
+            #self.print_chat(f"🧠❌ Reflection:\n{reflection}\n",'text') 
             
             next = 'finishing'
             return {'success':True,'action':action,'next':next,'input':input,'output':reflection}
@@ -1611,7 +1619,7 @@ class AgentCore:
         5. Action matching
         """
         action = 'process_message'
-        self.print_chat('Processing message through multiple stages...', 'text')
+        self.print_chat('Processing message...', 'text')
         
         # Get current time and date
         current_time = datetime.now().strftime("%Y-%m-%d")
@@ -1875,7 +1883,7 @@ class AgentCore:
             while True:
                 step_counter += 1
                 
-                self.print_chat(f"Next Step:{next_step}",'text') 
+                #self.print_chat(f"Next Step:{next_step}",'text') 
                 
                 # Check if we've exceeded the maximum number of iterations
                 if step_counter > MAX_ITERATIONS:
