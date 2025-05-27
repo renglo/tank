@@ -935,9 +935,12 @@ class AgentCore:
             # This regex looks for : 'value' pattern and replaces it with : "value"
             cleaned_response = re.sub(r':\s*\'([^\']*)\'', r': "\1"', cleaned_response)
             
-            # Remove any trailing commas
-            cleaned_response = cleaned_response.replace(',}', '}')
-            cleaned_response = cleaned_response.replace(',]', ']')
+            # Remove spaces between colons and boolean values
+            cleaned_response = re.sub(r':\s+(true|false|True|False)', r':\1', cleaned_response)
+            
+            # Remove trailing commas in objects and arrays
+            # This regex will match a comma followed by whitespace and then a closing brace or bracket
+            cleaned_response = re.sub(r',(\s*[}\]])', r'\1', cleaned_response)
             
             # Remove any timestamps in square brackets
             cleaned_response = re.sub(r'\[\d+\]\s*', '', cleaned_response)
@@ -1143,7 +1146,8 @@ class AgentCore:
                 'key':t.get('key', ''),
                 'goal':t.get('goal', ''),
                 'instructions':t.get('instructions', ''),
-                'input':t.get('input', '')
+                'input':t.get('input', ''),
+                'output':t.get('output', '')
             } 
             
             
@@ -1189,6 +1193,105 @@ class AgentCore:
 
         ### Action Examples:
         {examples or 'No examples available'}
+        
+        ### Special Requests
+        - Look in the Current Information whether the user has requested something in specific. 
+        - We are going to filter out the API results to provide only relevant information. 
+        - You can see the special requests as the filter part of a query. 
+        - Examples: 
+            a) the minimum or maximum value of something, 
+            b) to include or not include something, 
+            c) To be close to a location, 
+            d) For something to be greater or less than or equal to
+            e) To provide a limited amount of results, etc.
+            f) Whether the results need to be organized in a certain way
+            
+        ### Filter
+        - The filter is a projection that will be applied to the raw output of the tool to filter out the results. 
+        - The projection lets you extract, filter, and reshape JSON/dict data using a concise, declarative **projection** syntax.
+        
+        | Key            | Type           | Description                                                                 |
+        |----------------|----------------|-----------------------------------------------------------------------------|
+        | `field`: `True` | bool          | Include the field                                                           |
+        | `"!field"`: `True` | bool       | Exclude the field                                                           |
+        | `"*"`: `True`   | bool          | Include all fields                                                          |
+        | `$filter`       | str or lambda | Filter list elements (e.g. `"price < 500"` or `lambda x: x["x"] > 1`)       |
+        | `$sort_by`      | str           | Sort list by this field                                                     |
+        | `$reverse`      | bool          | Reverse the sorted list                                                     |
+        | `$limit`        | int           | Limit number of list elements returned                                      |
+        | `$min`          | str           | Return only the item with the smallest value for a field                    |
+        | `$max`          | str           | Return only the item with the largest value for a field                     |
+        | `items`         | dict          | Apply a nested projection to list elements                                  |
+
+        ---
+        
+        Filter example 1: Include Specific Fields
+            data = {{ "name": "Alice", "age": 30, "city": "NY" }}
+            projection = {{ "name": True, "age": True }}
+            
+        Filter example 2: Exclude Fields
+            projection = {{ "*": True, "!age": True }}
+            
+        Filter example 3: Wildcard
+            projection = {{ "*": True }}
+            
+        Filter example 4: Filter List with DSL
+        
+            data = {{ "flights": [ {{"price": 400}}, {{"price": 300}}, {{"price": 600}} ] }}
+            projection = {{
+                "flights": {{
+                    "$filter": "price < 500",
+                    "items": {{ "price": True }}
+                }}
+            }}
+            
+        Filter example 5: Sort and Limit
+        
+            projection = {{
+                "flights": {{
+                    "$sort_by": "price",
+                    "$limit": 2,
+                    "items": {{ "price": True }}
+                }}
+            }}
+            
+        Filter example 6: Get cheapest Flight
+        
+            projection = {{
+                "flights": {{
+                    "$min": "price",
+                    "items": {{ "price": True }}
+                }}
+            }}
+        
+        Filter example 7: Get Most expensive Flight
+        
+            projection = {{
+                "flights": {{
+                    "$max": "price",
+                    "items": {{ "price": True }}
+                }}
+            }}
+            
+        
+        Filter example 8: Combine Filter + Sort + Limit
+        
+            projection = {{
+                "flights": {{
+                    "$filter": "price < 600",
+                    "$sort_by": "price",
+                    "$limit": 1,
+                    "items": {{ "price": True }}
+                }}
+            }}
+            
+        Additional Tips for filters: 
+        - Use `items` to apply sub-filters to list elements.
+        - `$min` / `$max` returns a single-item list.
+        - You can use lambdas instead of DSL:  
+        `$filter`: `lambda x: x["price"] < 500`
+        
+        
 
         Return a JSON object with:
         {{
@@ -1197,7 +1300,11 @@ class AgentCore:
                 // Parameters needed for the tool
                 // Use values from the available information when possible
             }},
-            "reasoning": "Brief explanation of why this tool was selected as the next step"
+            "filter": {{
+                // Filter for this specific tools based on the belief special requirements. 
+            }}
+            "reasoning": "Brief explanation of why this tool was selected as the next step",
+            "special_requests": "Human readable version of the filter"
         }}
 
         IMPORTANT:
@@ -1235,7 +1342,7 @@ class AgentCore:
     def execute_intention(self):
         
         action = 'execute_intention'
-        self.print_chat(f"Reached execute_intention",'text') 
+        self.print_chat(f"Reached execute_intention ...",'text') 
         
         tools = self.DAC.get_a_b(self._get_context().portfolio, self._get_context().org, 'schd_tools')
         list_handlers = {}
@@ -1262,6 +1369,8 @@ class AgentCore:
             tool_name = intention.get('tool')
             params = intention.get('params', {})
             reasoning = intention.get('reasoning', "")
+            filter = intention.get('filter', "")
+            special_request = intention.get('special_request', "")
 
             if not tool_name:
                 raise ValueError("❌ No tool name provided in tool selection")
@@ -1269,8 +1378,12 @@ class AgentCore:
             print(f"Selected tool: {tool_name}")
             print(f"Reasoning: {reasoning}")
             print(f"Parameters: {params}")
+            print(f"Filter: {filter}")
+            print(f"special_request: {special_request}")
             
-        
+            # Send the filter along the parameters. The handler will use it. 
+            params['_filter'] = filter
+
             #list_handlers = self._get_context().list_handlers
             
             # Check if handler exists
@@ -1300,34 +1413,44 @@ class AgentCore:
             portfolio = self._get_context().portfolio
             org = self._get_context().org
   
-            self.print_chat(f'Calling {handler_route} ','text') 
-            #result = self.SHC.direct_run(handler_route, params)
+            #self.print_chat(f'Calling {handler_route} ','text') 
+            print(f'Calling {handler_route} ') 
+            
             response = self.SHC.handler_call(portfolio,org,parts[0],parts[1],params)
             
-            
-            if 'success' not in response:
+            if not response['success']:
                 return {'success':False,'action':action,'input':params,'output':response}
             
-            # Results coming from the handler
-            self.print_chat(response,'json')
+            #print('FLATTEN THIS:')
+            #print(response)
+            #self.print_chat('Flattening response...','text')
             
-            self._update_context(execute_intention_results=response)
+            #Flatten output
+            result = {}
+            result['action']= parts[1]
+            result['input']= response['output']['output']['output'][0]['input']
+            result['output']= response['output']['output']['output'][0]['output']
+            #result['flag1'] = 'red'
+            
+            
+            # Results coming from the handler
+            
+            self.print_chat(result,'json')
+            self._update_context(execute_intention_results=result)
+            
             print("✅ Tool execution complete.")
             
-            return {"success": True,"action":action,"input": intention,"output": response}
+            return {"success": True,"action":action,"input": intention,"output": result}
                     
         except Exception as e:
 
-            error_msg = f"❌ Execute Intention failed: '{tool_name}': {str(e)}"
+            error_msg = f"❌ Execute Intention failed. @'{tool_name}': {str(e)}"
             self.print_chat(error_msg,'text') 
             print(error_msg)
             self._update_context(execute_intention_error=error_msg)
             
             error_result = {
-                "success": False,
-                "action": action,
-                "input": intention,
-                "output": str(e)    
+                "success": False, "action": action,"input": intention,"output": str(e)    
             }
             
             self._update_context(execute_intention_results=error_result)
@@ -1489,18 +1612,27 @@ class AgentCore:
         print(f'Running: {action}')
         #self.print_chat('Updating chat document...','text')
         
-        response = self.CHC.update_message(
-                        self._get_context().entity_type,
-                        self._get_context().entity_id,
-                        self._get_context().thread,
-                        self._get_context().chat_id,
-                        update
-                    )
+        try:
         
-        if 'success' not in response:
-            return {'success':False,'action':action,'input':update,'output':response}
+            response = self.CHC.update_message(
+                            self._get_context().entity_type,
+                            self._get_context().entity_id,
+                            self._get_context().thread,
+                            self._get_context().chat_id,
+                            update
+                        )
+            
+            if 'success' not in response:
+                print(f'Something failed during update chat message {response}')
+                return {'success':False,'action':action,'input':update,'output':response}
+            
+            #print(f'All good during update chat message {response}')
+            return {'success':True,'action':action,'input':update,'output':response}
         
-        return {'success':True,'action':action,'input':update,'output':response}
+        except Exception as e:
+            print(f'Update chat message failed: {str(e)}')
+            return {'success':False,'action':action,'output':f'Error:{str(e)}'}
+
     
     
     

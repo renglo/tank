@@ -106,11 +106,11 @@ class ChatModel:
 
             # Query DynamoDB to get the specific item
             response = self.chat_table.query(**query_params)
-            current_app.logger.debug(f'Raw DynamoDB response: {response}')
+            #current_app.logger.debug(f'Raw DynamoDB response: {response}')
             
             # Extract items
             items = response.get('Items', [])
-            current_app.logger.debug(f'Extracted items: {items}')
+            #current_app.logger.debug(f'Extracted items: {items}')
             
             if not items:
                 current_app.logger.debug(f'No items found for index: {index} and message_id: {message_id}')
@@ -118,7 +118,7 @@ class ChatModel:
                 result['message'] = 'Item not found'
                 return result
             
-            print(f'CHM:get_chat > {items[0]}')
+            #print(f'CHM:get_chat > {items[0]}')
             
             # Build the result
             result['success'] = True
@@ -168,7 +168,7 @@ class ChatModel:
             # Sanitize data before storing
             sanitized_data = self.sanitize(data)
             response = self.chat_table.put_item(Item=sanitized_data)
-            current_app.logger.debug('MODEL: Updated entity successfully:'+str(sanitized_data))
+            #current_app.logger.debug('MODEL: Updated entity successfully')
             return {
                 "success":True, 
                 "message": "Chat updated", 

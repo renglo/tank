@@ -413,7 +413,7 @@ class AuthModel:
         
         try:
             response = self.entity_table.put_item(Item=data)
-            current_app.logger.debug('MODEL: Updated entity successfully:'+str(data))
+            #current_app.logger.debug('MODEL: Updated entity successfully')
             return {
                 "success":True, 
                 "message": "Entity updated", 

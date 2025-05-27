@@ -144,7 +144,7 @@ class SchdController:
             handler_input_data = {'portfolio': portfolio,'org':org,'handler':handler_name}
             response_3 = self.SHL.load_and_run(handler_name, payload = handler_input_data)
              
-            current_app.logger.debug(f'Handler output:{response_3}')
+            #current_app.logger.debug(f'Handler output:{response_3}')
             
             
             if not response_3['success']:
@@ -222,7 +222,7 @@ class SchdController:
             
         response = self.SHL.load_and_run(handler, payload = payload)
         
-        print(f'Handler output:{response}')
+        #print(f'Handler output:{response}')
         
         
         if not response['success']:
@@ -236,9 +236,6 @@ class SchdController:
     
     
     def handler_call(self,portfolio,org,tool,handler,payload):
-           
-        result = []
-
         action = 'handler_call'
         
         print(f'Calling handler:{handler}, payload:{payload}')
@@ -252,18 +249,15 @@ class SchdController:
             
         response = self.SHL.load_and_run(f'{tool}/{handler}', payload = payload)
         
-        print(f'Handler output:{response}')
-        
+        #print(f'Handler output:{response}')
         
         if not response['success']:
-            result.append({'success':False,'action':action,'handler':handler,'input':payload,'output':response})
-            return result
+            return {'success':False,'action':action,'handler':handler,'input':payload,'output':response}
+            
         
-        result.append({'success':True,'action':action,'handler':handler,'input':payload,'output':response})
+        return {'success':True,'action':action,'handler':handler,'input':payload,'output':response}
 
-        return result
-    
- 
+
     
 
     def delete_rule(self, rule_name):

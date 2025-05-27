@@ -160,7 +160,7 @@ class ChatController:
                 return data
             
             item = data['item']
-            print(f'Document retrieved:{item}')
+            #print(f'Document retrieved:{item}')
             
             if 'output' not in item or not isinstance(item['output'], list):
                 item['output'] = []
@@ -169,7 +169,7 @@ class ChatController:
             update = self._convert_floats_to_strings(update)
             item['output'].append(update)
             
-            current_app.logger.debug(f'Prepared data for chat update: {item}')
+            #current_app.logger.debug(f'Prepared data for chat update: {item}')
             response = self.CHM.update_chat(item)
             print(response) 
             return response
