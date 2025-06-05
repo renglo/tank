@@ -101,7 +101,7 @@ class ChatController:
             current_app.logger.debug(f'payload: {payload}')
             
             # Validate required payload fields
-            required_fields = ['context', 'input', 'message']
+            required_fields = ['context']
             if not all(field in payload for field in required_fields):
                 missing_fields = [field for field in required_fields if field not in payload]
                 raise ValueError(f"Missing required payload fields: {missing_fields}")
@@ -109,18 +109,16 @@ class ChatController:
 
             print('All fields required: OK')
             
-            output = []
-            if 'output' in payload and isinstance(payload['output'], list):
-                output = payload['output']
+            messages = []
+            if 'messages' in payload and isinstance(payload['messages'], list):
+                messages = payload['messages']
             
             data = {
                 'author_id': self.get_current_user(),
                 'time': str(datetime.now().timestamp()),
                 'is_active': True,
                 'context': payload['context'],
-                'input': payload['input'],
-                'output': output,
-                'message': payload['message'],
+                'messages': messages,
                 'index': index,
                 '_id': str(uuid.uuid4())
             }
@@ -151,7 +149,7 @@ class ChatController:
             return str(obj)
         return obj
 
-    def update_message(self,entity_type, entity_id, thread_id, message_id, update):
+    def update_message_x(self,entity_type, entity_id, thread_id, message_id, update):
         print(f'CHC:update_message {entity_type}/{thread_id}/{message_id}:{update}')
         try:
             data = self.get_message(entity_type, entity_id, thread_id, message_id)
@@ -162,12 +160,51 @@ class ChatController:
             item = data['item']
             #print(f'Document retrieved:{item}')
             
-            if 'output' not in item or not isinstance(item['output'], list):
-                item['output'] = []
+            if 'messages' not in item or not isinstance(item['messages'], list):
+                item['messages'] = []
             
             # Convert any float values in the update to strings
             update = self._convert_floats_to_strings(update)
-            item['output'].append(update)
+            item['messages'].append(update)
+            
+            #current_app.logger.debug(f'Prepared data for chat update: {item}')
+            response = self.CHM.update_chat(item)
+            print(response) 
+            return response
+        
+        except Exception as e:
+            current_app.logger.error(f"Error in update_message: {str(e)}")
+            return {
+                "success": False,
+                "message": f"Error updating message: {str(e)}",
+                "status": 500
+            }
+            
+    
+    def update_message(self,entity_type, entity_id, thread_id, message_id, update, call_id=False):
+        print(f'CHC:update_message {entity_type}/{thread_id}/{message_id}:{update}')
+        try:
+            data = self.get_message(entity_type, entity_id, thread_id, message_id)
+            
+            if not data['success']:
+                return data
+            
+            item = data['item']
+            #print(f'Document retrieved:{item}')
+            
+            if 'messages' not in item or not isinstance(item['messages'], list):
+                item['messages'] = []
+            
+            
+            if call_id:   
+                for i in item['messages']:
+                    if 'tool_call_id' in i['_out'] and i['_out']['tool_call_id'] == call_id:
+                        i = update # update has the shape {'_out':... , '_type':...} You are replacing the entire object
+            else:
+                    
+                # Convert any float values in the update to strings
+                update = self._convert_floats_to_strings(update)
+                item['messages'].append(update)
             
             #current_app.logger.debug(f'Prepared data for chat update: {item}')
             response = self.CHM.update_chat(item)
@@ -240,9 +277,9 @@ class ChatController:
 
             print('All fields required: OK')
             
-            data = []
-            if 'data' in payload and isinstance(payload['data'], list):
-                data = payload['data']
+            cache = {}
+            if 'cache' in payload and isinstance(payload['cache'], dict):
+                cache = payload['cache']
                 
             config = {}
             if 'config' in payload and isinstance(payload['config'], dict):
@@ -261,7 +298,7 @@ class ChatController:
                 'state': state,
                 'type': type,
                 'config' : config,
-                'data':data,
+                'cache':cache,
                 'index': index,
                 '_id': str(uuid.uuid4())
             }
@@ -299,10 +336,10 @@ class ChatController:
                 item['state'] = payload['state']
                 changed = True
                 
-            if 'data' in payload:
-                if 'data' not in item:
-                    item['data'] = []
-                item['data'] = payload['data']
+            if 'cache' in payload:
+                if 'cache' not in item:
+                    item['cache'] = {}
+                item['cache'] = payload['cache']
                 changed = True
                 
             if changed:

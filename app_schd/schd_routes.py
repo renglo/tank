@@ -217,6 +217,9 @@ def handler_call(portfolio,org,tool,handler):
     payload = request.get_json() 
     response = SHC.handler_call(portfolio,org,tool,handler,payload)
     
+    if not response['success']:
+        return jsonify(response), 400
+    
     return jsonify(response), 200
 
 

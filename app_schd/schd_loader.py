@@ -119,45 +119,53 @@ class SchdLoader:
     def load_and_run(self, module_name, *args, **kwargs):
         """Loads a module, runs its class method, then unloads it."""
         action = "load_and_run"
+        print(f'running: {action}')
         
+        try:
      
-        class_name = self.convert_module_name_to_class(module_name)
-        current_app.logger.info(f'Attempting to load class:{class_name}')
-        
-        module_parts = module_name.split("/")
-        payload = kwargs.get('payload')  # Extract payload from kwargs
-        
-        instance = self.load_code_class(module_parts[0],module_parts[1], class_name, *args, **kwargs)
-        runtime_loaded_class = True
-  
-        if not instance:
-            error = f"Class '{class_name}' in '{module_name}' could not be loaded."
-            return {'success':False,'action':action,'error':error,'output':error,'status':500}
-        
-        current_app.logger.info(f'Class Loaded:{class_name}')
-        
-        if hasattr(instance, "run"):       
-            result = instance.run(payload)  # Pass payload to run
-        else:
-            error = f"Class '{class_name}' in '{module_name}' has no 'run' method."
-            current_app.logger.error(error)
-            return {'success':False,'action':action,'error':error,'status':500}
+            class_name = self.convert_module_name_to_class(module_name)
+            current_app.logger.info(f'Attempting to load class:{class_name}')
+            
+            module_parts = module_name.split("/")
+            payload = kwargs.get('payload')  # Extract payload from kwargs
+            
+            instance = self.load_code_class(module_parts[0],module_parts[1], class_name, *args, **kwargs)
+            runtime_loaded_class = True
+    
+            if not instance:
+                error = f"Class '{class_name}' in '{module_name}' could not be loaded."
+                return {'success':False,'action':action,'error':error,'output':error,'status':500}
+            
+            current_app.logger.info(f'Class Loaded:{class_name}')
+            
+            if hasattr(instance, "run"):       
+                result = instance.run(payload)  # Pass payload to run
+            else:
+                error = f"Class '{class_name}' in '{module_name}' has no 'run' method."
+                current_app.logger.error(error)
+                return {'success':False,'action':action,'error':error,'status':500}
 
 
-        if runtime_loaded_class:
-            # Unload module to free memory
-            del instance
-            if module_name in sys.modules:
-                del sys.modules[module_name]
-            gc.collect()
+            if runtime_loaded_class:
+                # Unload module to free memory
+                del instance
+                if module_name in sys.modules:
+                    del sys.modules[module_name]
+                gc.collect()
+                
+                
             
+            if 'success' in result and not result['success']:
+                
+                return {'success':False,'action':action,'output':result,'status':400} 
             
+            return {'success':True,'action':action,'output':result,'status':200}
         
-        if 'success' in result and not result['success']:
-            
-            return {'success':False,'action':action,'output':result,'status':400} 
-        
-        return {'success':True,'action':action,'output':result,'status':200}
+        except Exception as e:
+            print(f'Error @load_and_run: {str(e)}')
+            return {'success':False,'action':action,'input':class_name,'output':f'Error @load_and_run: {str(e)}'}
+
+
 
 # Example Usage
 if __name__ == "__main__":

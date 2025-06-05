@@ -240,22 +240,24 @@ class SchdController:
         
         print(f'Calling handler:{handler}, payload:{payload}')
         
-        #Augmenting the payload with portfolio, org and tool information
-        payload['portfolio'] = portfolio
-        payload['org'] = org
-        payload['tool'] = tool
-             
-        response = {'success':False,'output':[]}
+        try:        
+            #Augmenting the payload with portfolio, org and tool information
+            payload['portfolio'] = portfolio
+            payload['org'] = org
+            payload['tool'] = tool
+                
+            response = {'success':False,'output':[]}
             
-        response = self.SHL.load_and_run(f'{tool}/{handler}', payload = payload)
-        
-        #print(f'Handler output:{response}')
-        
-        if not response['success']:
-            return {'success':False,'action':action,'handler':handler,'input':payload,'output':response}
+            response = self.SHL.load_and_run(f'{tool}/{handler}', payload = payload)
             
+            if not response['success']:
+                return {'success':False,'action':action,'handler':handler,'input':payload,'output':response}
+                  
+            return {'success':True,'action':action,'handler':handler,'input':payload,'output':response}
         
-        return {'success':True,'action':action,'handler':handler,'input':payload,'output':response}
+        except Exception as e:
+            print(f'Error @handler_call: {str(e)}')
+            return {'success':False,'action':action,'handler':handler,'input':payload,'output':f'Error @handler_call: {str(e)}'}
 
 
     
