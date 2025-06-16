@@ -56,7 +56,7 @@ class ChatController:
             'is_active' : True,
             'entity_id' : entity_id,
             'entity_type' : entity_type,
-            'language' : 'ES',
+            'language' : 'EN',
             'index' : index,
             '_id':str(uuid.uuid4()),        
         }

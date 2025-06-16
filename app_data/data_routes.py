@@ -74,6 +74,16 @@ def route_a_b_get(portfolio, org, ring):
         response = DAC.get_a_b(portfolio, org, ring, limit, lastkey, sort)
         return jsonify(response), 200  # Ensure a consistent JSON response
     
+
+#TANK-FE *
+@app_data.route('/<string:portfolio>/_all/<string:ring>', methods=['POST'])
+@cognito_auth_required
+def route_a_all_post(portfolio,ring):
+    
+    payload = request.get_json()
+    response, status = DAC.post_a_b(portfolio,'_all',ring,payload)
+    DAC.refresh_s3_cache(portfolio, '_all', ring, None)
+    return response, status
     
 
 #TANK-FE *
@@ -85,6 +95,7 @@ def route_a_b_post(portfolio,org,ring):
     response, status = DAC.post_a_b(portfolio,org,ring,payload)
     DAC.refresh_s3_cache(portfolio, org, ring, None)
     return response, status
+
 
 
 #TANK-FE *

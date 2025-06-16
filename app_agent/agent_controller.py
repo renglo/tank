@@ -1,10 +1,12 @@
 from app_agent.agent_core import AgentCore
+from app_agent.agent_core_portfolio_public import AgentCorePortfolioPublic
 
 class AgentController:
 
     def __init__(self,tid=None,ip=None):
         
         self.AGK_1 = AgentCore()
+        self.AGK_2 = AgentCorePortfolioPublic()
 
     def triage(self,payload,core_name='core_1'):
         
@@ -21,6 +23,10 @@ class AgentController:
         
         # At the moment we only have one kind of agent: core_1
         result ={}
+        
+        if core_name == 'portfolio_public':
+            result = self.AGK_2.run(payload)
+        
         if core_name == 'core_1':
             result = self.AGK_1.run(payload) 
           
