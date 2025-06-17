@@ -436,6 +436,10 @@ def gupshup_in(portfolio,tool_id):
                     'thread':last_thread['_id'],
                     'data': msg_content
                 }
+                
+                # config_location = <org_id> | '_all'
+                # get_location = [<org_id_1>,<org_id_2>,<org_id_3>]
+                # post_location = 
                     
                 response_1 = AGC.triage(input,core_name='portfolio_public')
                 result.append(response_1)

@@ -1068,8 +1068,7 @@ class AgentCore:
                     if 'tools_reference' in a and a['tools_reference'] and a['tools_reference'] not in ['_','-','.']: 
                         action_tools = a['tools_reference']
                     break
-                    
-            
+                            
             # Belief  
             current_beliefs = workspace.get('state', {}).get('beliefs', {}) if workspace else {}
             belief_str = 'Current beliefs: ' + self.string_from_object(current_beliefs)
@@ -1092,8 +1091,7 @@ class AgentCore:
             meta_instructions['current_time'] = f'The current time is: {current_time}'
             # Message to answer questions from the belief system
             meta_instructions['answer_from_belief'] = "You can reason over the message history and known facts (beliefs) to answer user questions. If the user asks a question, check the history or beliefs before asking again."
-         
-            
+                  
             # Message array
             messages = [
                 { "role": "system", "content": meta_instructions['opening_message']}, # META INSTRUCTIONS
@@ -1105,17 +1103,13 @@ class AgentCore:
             
             # Add the incoming messages
             for msg in message_list:      
-                messages.append(msg)     
-                
-            print('flag10')   
+                messages.append(msg)       
                 
             # Request asking the recommended tools for this action
             if action_tools:
-                messages.append({ "role": "system", "content":f'In case you need them, the following tools are recommended to execute this action: {json.dumps(action_tools)}'})
-                              
+                messages.append({ "role": "system", "content":f'In case you need them, the following tools are recommended to execute this action: {json.dumps(action_tools)}'})                      
             
-            # Tools
-            
+            # Tools           
             '''   
             tool.input should look like this in the database:
                 
@@ -1132,14 +1126,10 @@ class AgentCore:
                     }
                 }
             '''
-            
-            
-            
+              
             list_tools_raw = self._get_context().list_tools
             
-            print(f'List Tools:{list_tools_raw}')
-            
-            
+            #print(f'List Tools:{list_tools_raw}')
             
             list_tools = [] 
             for t in list_tools_raw:
@@ -1167,10 +1157,8 @@ class AgentCore:
                     }    
                 }
                 
-                print(f'Tool:{tool}')
-                
-                list_tools.append(tool)
-                
+                #print(f'Tool:{tool}')       
+                list_tools.append(tool)          
                 #print(f'List Tools:{list_tools}')
                         
             # Prompt
@@ -1182,7 +1170,6 @@ class AgentCore:
                     "tool_choice": "auto"
                 }
             
-        
             response = self.llm(prompt)
             print(f'RAW PROMPT >> {prompt}')
             print(f'RAW RESPONSE >> {response}')
