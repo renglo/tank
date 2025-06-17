@@ -173,17 +173,14 @@ def chat_threads(entity_type,entity_id):
 # SAMPLE URL https://<some_domain/_chat/<entity_type>/<entity_id>/<thread_id>/<messages>
 # INPUT: entity_type, entity_id, thread_id
 # OUTPUT: A list of messages that belong to the conversation thread
-@app_chat.route('<string:entity_type>/<string:entity_id>/<string:thread_id>/messages', methods=['GET','POST'])
+@app_chat.route('<string:entity_type>/<string:entity_id>/<string:thread_id>/messages', methods=['GET'])
 @cognito_auth_required
 def chat_messages(entity_type,entity_id,thread_id):
     
     
     if request.method == 'GET':
         response = CHC.list_messages(entity_type,entity_id,thread_id)  
-    elif request.method == 'POST':
-        payload = request.get_json()
-        response = CHC.create_message(entity_type,entity_id,thread_id,payload) 
-        
+
         
     return response
 
@@ -193,16 +190,13 @@ def chat_messages(entity_type,entity_id,thread_id):
 # SAMPLE URL https://<some_domain/_chat/<entity_type>/<entity_id>/<thread_id>
 # INPUT: entity_type, entity_id, thread_id
 # OUTPUT: A list of messages that belong to the conversation thread
-@app_chat.route('<string:entity_type>/<string:entity_id>/<string:thread_id>/workspaces', methods=['GET','POST'])
+@app_chat.route('<string:entity_type>/<string:entity_id>/<string:thread_id>/workspaces', methods=['GET'])
 @cognito_auth_required
 def chat_workspaces(entity_type,entity_id,thread_id):
       
     if request.method == 'GET':
         response = CHC.list_workspaces(entity_type,entity_id,thread_id)  
-    elif request.method == 'POST':
-        payload = request.get_json()
-        response = CHC.create_workspace(entity_type,entity_id,thread_id,payload) 
-              
+      
     return response
 
 
@@ -249,11 +243,88 @@ def chat_tb():
 
 
 
+
+def validate_gupshup_payload(payload: dict) -> tuple[bool, str]:
+    """
+    Validates that the Gupshup payload follows the expected format.
+    
+    Args:
+        payload (dict): The payload to validate
+        
+    Returns:
+        tuple[bool, str]: (is_valid, error_message)
+    """
+    # Check top level required fields
+    required_fields = ['app', 'timestamp', 'version', 'type', 'payload']
+    for field in required_fields:
+        if field not in payload:
+            return False, f"Missing required field: {field}"
+        
+    result = ()
+    
+    # Validate top level field types
+    if not isinstance(payload['app'], str):
+        return False, "Field 'app' must be a string"
+    if not isinstance(payload['timestamp'], (int, float)):
+        return False, "Field 'timestamp' must be a number"
+    if not isinstance(payload['version'], (int, float)):
+        return False, "Field 'version' must be a number"
+    if not isinstance(payload['type'], str):
+        return False, "Field 'type' must be a string"
+    if not isinstance(payload['payload'], dict):
+        return False, "Field 'payload' must be an object"
+    
+    # Validate payload object
+    payload_obj = payload['payload']
+    required_payload_fields = ['id', 'source', 'type', 'sender']
+    for field in required_payload_fields:
+        if field not in payload_obj:
+            return False, f"Missing required field in payload: {field}"
+    
+    # Validate payload field types
+    if not isinstance(payload_obj['id'], str):
+        return False, "Field 'payload.id' must be a string"
+    if not isinstance(payload_obj['source'], str):
+        return False, "Field 'payload.source' must be a string"
+    if not isinstance(payload_obj['type'], str):
+        return False, "Field 'payload.type' must be a string"
+    
+    # Validate message type
+    valid_types = ['text', 'image', 'file', 'audio', 'video', 'contact', 'location', 'button_reply', 'list_reply']
+    if payload_obj['type'] not in valid_types:
+        return False, f"Invalid message type. Must be one of: {', '.join(valid_types)}"
+    
+    # Validate sender object
+    if not isinstance(payload_obj['sender'], dict):
+        return False, "Field 'payload.sender' must be an object"
+    
+    sender = payload_obj['sender']
+    required_sender_fields = ['phone', 'name', 'country_code', 'dial_code']
+    for field in required_sender_fields:
+        if field not in sender:
+            return False, f"Missing required field in sender: {field}"
+        if not isinstance(sender[field], str):
+            return False, f"Field 'payload.sender.{field}' must be a string"
+    
+    # Validate context if present
+    if 'context' in payload_obj:
+        if not isinstance(payload_obj['context'], dict):
+            return False, "Field 'payload.context' must be an object"
+        context = payload_obj['context']
+        if 'id' not in context or not isinstance(context['id'], str):
+            return False, "Field 'payload.context.id' must be a string"
+        if 'gsId' not in context or not isinstance(context['gsId'], str):
+            return False, "Field 'payload.context.gsId' must be a string"
+    
+    return True, ""
+
+
+
+
 # PROTOTYPE FUNCTION. IT CONTAINS MANY HARDCODED DEPENDENCIES
 @app_chat.route('/gs_in/<string:portfolio>/<string:tool_id>', methods=['POST'])
 @cognito_auth_required
 def gupshup_in(portfolio,tool_id):
-    
     
     
     entity_id = ''
@@ -292,6 +363,10 @@ def gupshup_in(portfolio,tool_id):
     '''
     
     gupshup_payload = request.get_json()
+    valid,state = validate_gupshup_payload(gupshup_payload)
+    if not valid:
+        return {'success':False,'output':state}
+    
     
     msg_content = gupshup_payload['payload']['payload']['message']
     msg_timestamp = gupshup_payload['timestamp']
@@ -341,16 +416,18 @@ def gupshup_in(portfolio,tool_id):
     }
     
     '''
+    print(f'List Threads:{threads}')
     
     initialize_thread = False
     if 'success' in threads: 
         if len(threads['items'])<1:
             # No threads found
             # ACTION: Set flag to initialize a thread
+            print(f'Creating thread because:No threads have been found')
             initialize_thread = True
             
         # Pick the last thread
-        last_thread = threads['items'][-1]
+        last_thread = threads['items'][0]
         # For the thread to be valid. It needs to belong to the message sender number and be from today.
         if last_thread['author_id'] == gupshup_payload['payload']['source']:
             if datetime.fromtimestamp(float(last_thread['time'])).strftime('%Y-%m-%d') == datetime.fromtimestamp(float(msg_timestamp)/1000).strftime('%Y-%m-%d'):
@@ -373,15 +450,19 @@ def gupshup_in(portfolio,tool_id):
             else:
                 # This user has sent messages before but not today
                 # ACTION: Set flag to initialize a thread
+                print(f'Creating thread because:This user has sent messages before but not today')
                 initialize_thread = True
         else:
             # This user has not sent a message before
             # ACTION: Set flag to initialize a thread
+            print(f'Creating thread because:This user has not sent a message before')
             initialize_thread = True
               
     if initialize_thread:
+        
 
-        response_2 = CHC.create_thread(entity_type,entity_id)
+        print(f'Calling : create_thread ')
+        response_2 = CHC.create_thread(entity_type,entity_id,public_user = gupshup_payload['payload']['source'])
         if not response_2['success']:
             return False
             
@@ -389,14 +470,14 @@ def gupshup_in(portfolio,tool_id):
         input = {
             'action':'gupshup_message', # We don't need this
             'portfolio':portfolio,
-            'anonymous_user': gupshup_payload['payload']['source'],
+            'public_user': gupshup_payload['payload']['source'],
             'entity_type':entity_type,
             'entity_id':entity_id,
             'thread':new_thread_id,
             'data': msg_content
         }
             
-        response_1 = AGC.triage(input,core_name='portfolio_anonymous')
+        response_1 = AGC.triage(input,core_name='portfolio_public')
         result.append(response_1)
         
     
@@ -404,5 +485,6 @@ def gupshup_in(portfolio,tool_id):
     current_app.logger.debug(result)
         
     return result
+
 
 

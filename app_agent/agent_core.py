@@ -26,6 +26,7 @@ class RequestContext:
     connection_id: str = ''
     portfolio: str = ''
     org: str = ''
+    public_user: str = ''
     entity_type: str = ''
     entity_id: str = ''
     thread: str = ''
@@ -207,17 +208,18 @@ class AgentCore:
             # This is a tool call
             message_type = 'tool_rq'
             doc = {'_out':self.sanitize(output),'_type':'tool_rq'}
-            
-            rs_template = {
-                    "role": "tool",
-                    "tool_call_id": output['tool_calls'][0]['id'],
-                    "content": []
-                }
-            doc_rs_placeholder = {'_out':rs_template,'_type':'tool_rs'}
-            
-            # Memorize to permanent storage
+             # Memorize to permanent storage
             self.update_chat_message_document(doc)
-            self.update_chat_message_document(doc_rs_placeholder)
+            
+            for tool_call in output['tool_calls']:
+                
+                rs_template = {
+                        "role": "tool",
+                        "tool_call_id": tool_call['id'],
+                        "content": []
+                    }
+                doc_rs_placeholder = {'_out':rs_template,'_type':'tool_rs'}
+                self.update_chat_message_document(doc_rs_placeholder)
             
             
         elif output['content'] and output['role']=='assistant':
@@ -295,6 +297,11 @@ class AgentCore:
         if not context.thread:
             return False
         
+        if context.public_user:
+            payload = {'context':{'public_user':context.public_user}}
+        else:
+            payload = {}
+        
 
         print("MUTATE_WORKSPACE>>",changes)
        
@@ -307,7 +314,8 @@ class AgentCore:
         
         if len(workspaces_list['items'])==0:
             #Create a workspace as none exist
-            response = self.CHC.create_workspace(context.entity_type,context.entity_id,context.thread,{}) 
+            
+            response = self.CHC.create_workspace(context.entity_type,context.entity_id,context.thread,payload) 
             if not response['success']:
                 return False
             # Regenerate workspaces_list
@@ -468,10 +476,11 @@ class AgentCore:
         message_context = {}
         message_context['portfolio'] = self._get_context().portfolio
         message_context['org'] = self._get_context().org
+        message_context['public_user'] = self._get_context().public_user
         message_context['entity_type'] = self._get_context().entity_type
         message_context['entity_id'] = self._get_context().entity_id
         message_context['thread'] = self._get_context().thread
-        
+          
         new_message = { "role": "user", "content": message }
         msg_wrap = {"_out":new_message,"_type":"text"}
         
@@ -769,7 +778,9 @@ class AgentCore:
             return {"success":False,"action":action,"input":response,"output": "Response must have either non-null 'content' or non-null 'tool_calls'"}
             
         if has_content and has_tool_calls:
-            return {"success":False,"action":action,"input":response,"output": "Response cannot have both 'content' and 'tool_calls'"}
+            # If this happens, remove content so the message is still compliant
+            response['content'] = ''
+            #return {"success":False,"action":action,"input":response,"output": "Response cannot have both 'content' and 'tool_calls'"}
             
         # If it's a tool call, validate the tool_calls structure
         if has_tool_calls:
@@ -1062,6 +1073,7 @@ class AgentCore:
             # Belief  
             current_beliefs = workspace.get('state', {}).get('beliefs', {}) if workspace else {}
             belief_str = 'Current beliefs: ' + self.string_from_object(current_beliefs)
+            print(f'Current Belief:{belief_str}')
                 
             #belief_history = workspace.get('state', {}).get('history', []) if workspace else []             
             #cleaned_belief_history = self.sanitize(belief_history) if belief_history else []
@@ -1070,6 +1082,7 @@ class AgentCore:
             # Desire
             current_desire = workspace.get('state', {}).get('desire', '') if workspace else ''
             desire_str = 'Current goal:' + current_desire
+            print(f'Current Desire:{desire_str}')
             
             # Meta Instructions
             meta_instructions = {}
@@ -1092,7 +1105,9 @@ class AgentCore:
             
             # Add the incoming messages
             for msg in message_list:      
-                messages.append(msg)        
+                messages.append(msg)     
+                
+            print('flag10')   
                 
             # Request asking the recommended tools for this action
             if action_tools:
@@ -1122,14 +1137,18 @@ class AgentCore:
             
             list_tools_raw = self._get_context().list_tools
             
-            #print(f'List Tools:{list_tools_raw}')
+            print(f'List Tools:{list_tools_raw}')
+            
             
             
             list_tools = [] 
             for t in list_tools_raw:
                 # Parse the escaped JSON string into a Python object
-                tool_input = json.loads(t.get('input', '{}'))
-                #print(f'Tool input:{tool_input}')
+                try:
+                    tool_input = json.loads(t.get('input', '{}'))
+                except json.JSONDecodeError:
+                    print(f"Warning: Invalid JSON in tool input for tool {t.get('key', 'unknown')}. Using empty object.")
+                    tool_input = {}
                 
                 dict_params = {}
                 for key, val in tool_input.items():
@@ -1148,7 +1167,7 @@ class AgentCore:
                     }    
                 }
                 
-                #print(f'Tool:{tool}')
+                print(f'Tool:{tool}')
                 
                 list_tools.append(tool)
                 
@@ -1165,8 +1184,8 @@ class AgentCore:
             
         
             response = self.llm(prompt)
-            #print(f'RAW PROMPT >> {prompt}')
-            #print(f'RAW RESPONSE >> {response}')
+            print(f'RAW PROMPT >> {prompt}')
+            print(f'RAW RESPONSE >> {response}')
             
             validation = self.validate_interpret_openai_llm_response(response)
             if not validation['success']:
@@ -1194,7 +1213,7 @@ class AgentCore:
             return {
                 'success': False,
                 'action': action,
-                'input': prompt,
+                'input': '',
                 'output': str(e)
             }
     
@@ -1421,17 +1440,34 @@ class AgentCore:
         
         # Update context with payload data
         if 'connectionId' in payload:
-            context.connection_id = payload["connectionId"]      
+            context.connection_id = payload["connectionId"]
+                  
         if 'portfolio' in payload:
             context.portfolio = payload['portfolio']
+        else:
+            return {'success':False,'action':action,'input':payload,'output':'No portfolio provided'}
+        
         if 'org' in payload:
             context.org = payload['org']
+        else:
+            context.org = '_all' #If no org is provided, we switch the Agent to portfolio level
+            
+        if 'public_user' in payload:
+            context.public_user = payload['public_user']
+                    
         if 'entity_type' in payload:
             context.entity_type = payload['entity_type']
+        else:
+            return {'success':False,'action':action,'input':payload,'output':'No entity_type provided'}
+        
         if 'entity_id' in payload:
             context.entity_id = payload['entity_id']
+        else:
+            return {'success':False,'action':action,'input':payload,'output':'No entity_id provided'}
+        
         if 'thread' in payload:
             context.thread = payload['thread']
+            
         if 'workspace' in payload:
             context.workspace_id = payload['workspace']
             

@@ -46,12 +46,17 @@ class ChatController:
         return response
          
     
-    def create_thread(self,entity_type,entity_id):
+    def create_thread(self,entity_type,entity_id,public_user=''):
         
         index = f"irn:chat:{entity_type}/thread:{entity_id}"
         
+        if public_user:
+            author_id = public_user
+        else:
+            author_id = self.get_current_user()
+        
         data = {
-            'author_id' : self.get_current_user(),
+            'author_id' : author_id,
             'time' : str(datetime.now().timestamp()),
             'is_active' : True,
             'entity_id' : entity_id,
@@ -106,15 +111,19 @@ class ChatController:
                 missing_fields = [field for field in required_fields if field not in payload]
                 raise ValueError(f"Missing required payload fields: {missing_fields}")
             
-
             print('All fields required: OK')
             
             messages = []
             if 'messages' in payload and isinstance(payload['messages'], list):
                 messages = payload['messages']
+                
+            if payload['context']['public_user']:
+                author_id = payload['context']['public_user']
+            else:
+                author_id = self.get_current_user()
             
             data = {
-                'author_id': self.get_current_user(),
+                'author_id': author_id,
                 'time': str(datetime.now().timestamp()),
                 'is_active': True,
                 'context': payload['context'],
@@ -289,9 +298,14 @@ class ChatController:
             if 'type' in payload and isinstance(payload['type'], str):
                 type = payload['type']
             
-            # CHANGE THIS TO FIT THE WORKSPACE SCHEMA
+            #Check if this is a Public user
+            if payload.get('context', {}).get('public_user'):
+                author_id = payload['context']['public_user']
+            else:
+                author_id = self.get_current_user()
+            
             data = {
-                'author_id': self.get_current_user(),
+                'author_id':author_id,
                 'time': str(datetime.now().timestamp()),
                 'is_active': True,
                 'context': context,
