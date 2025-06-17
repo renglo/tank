@@ -384,7 +384,7 @@ def gupshup_in(portfolio,tool_id):
     # 4. Check if thread is from today. If yes Send payload to the AgentTriage with org_id and thread_id
     # 4b. If the thread is not from today, create a new one. 
     
-    entity_type = 'portfolio-tool-sender'
+    entity_type = 'portfolio-tool-public'
     entity_id = f'{portfolio}-{tool_id}-{msg_sender}'
     # List threads will return success=true even if the list is empty (no threads)
     threads = CHC.list_threads(entity_type,entity_id) 
@@ -398,8 +398,8 @@ def gupshup_in(portfolio,tool_id):
                 "_id": "8fcdd1f4-7eb8-4720-875e-3058b96867af",
                 "author_id": "9177697760",
                 "entity_id": "5038a960fde7-ca1a009b27d8-9177697760",
-                "entity_type": "portfolio-tool-sender",
-                "index": "irn:chat:portfolio-tool-sender/thread:5038a960fde7-ca1a009b27d8-9177697760",
+                "entity_type": "portfolio-tool-public",
+                "index": "irn:chat:portfolio-tool-public/thread:5038a960fde7-ca1a009b27d8-9177697760",
                 "is_active": true,
                 "language": "ES",
                 "time": "1747404175.06456"
