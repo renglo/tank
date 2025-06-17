@@ -308,7 +308,7 @@ python create_websocket_api.py <api_name> "<integration_target>" "<endpoint>" <e
 Example_Usage:
 python create_websocket_api.py x_prod_1234a_websocket "chat_message" "https://qwerty123.execute-api.us-east-1.amazonaws.com/x_prod_1234a/_chat/message" prod --aws-profile volatour
 
-Enable two-way communication in the HTTP integration (this needs to be done manually)
+Check that the Two Way communication is DISABLED
 
 Go to the Stages section in the new WebSocket API (just created) and looks for:
 
@@ -318,7 +318,9 @@ Open tank/env_config.py and paste the @connections URL in the constant called WE
 
 Open tower/.env.production and tower/.env.development and paste the WebSocket URL as is
 
-IMPORTANT: Check that HTTP proxy integration Info is set to False
+In the "Integration request settings"
+IMPORTANT: Check that HTTP proxy integration Info is set to: False
+IMPORTANT: Check that the Content Handling is set to : Convert to Text
 
 
 

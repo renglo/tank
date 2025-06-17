@@ -99,38 +99,31 @@ def real_time_message():
         
         # For WebSocket responses, we need to return a specific format
         try:
-            response_body = {
-                'ws': True, 
-                'input': payload,  
-                'output': response_data
+            
+            response_body ={
+                "statusCode": 200
             }
             
-            return {
-                'statusCode': 200,
-                'body': response_body
-                #'body': json.dumps(response_body, cls=DecimalEncoder)      
-            }
+            # Always return a response, even if it's just an acknowledgment
+            return jsonify(response_body), 200
+            
         except Exception as e:
             current_app.logger.error(f"Error handling response: {str(e)}")
-            return {
-                'statusCode': 500,
-                'body': json.dumps({
-                    'error': 'Internal server error (a)',
-                    'details': str(e)
-                })
-            }
+            return jsonify({
+                'error': 'Internal server error (a)',
+                'details': str(e)
+            }), 500
             
     except Exception as e:
         current_app.logger.error(f"Error processing message: {str(e)}")
-        if payload.get('connectionId'):
-            return {
-                'statusCode': 500,
-                'body': json.dumps({
-                    'error': 'Internal server error (b)',
-                    'details': str(e)
-                })
-            }
-        return jsonify({'error': 'Internal server error (c)', 'details': str(e)}), 500
+        # Always return a response, even in error cases
+        error_response = {
+            'error': 'Internal server error (b)',
+            'details': str(e)
+        }
+        if payload and 'connectionId' in payload:
+            error_response['connectionId'] = payload['connectionId']
+        return jsonify(error_response), 500
     
 
 
