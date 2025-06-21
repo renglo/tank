@@ -66,12 +66,43 @@ Follow the instructions in  `tank/installer/ENVIRONMENT_README.md` on how to ins
 
 Come back after your are done with that step.
 
+### Step 3a: Update config files
 
-Update your configuration files with the latest tokens and ids obtained in this step: 
+Update your configuration files with the latest tokens and ids obtained in Step 3: 
 
-`tank/env_config.py`
-`tower/.env.development.*`
-`tower/.env.production.*`
+In `tank/env_config.py` 
+
+Update the name of the tables
+
+    DYNAMODB_ENTITY_TABLE = '<name>_entities'
+    DYNAMODB_BLUEPRINT_TABLE = '<name>_blueprints'
+    DYNAMODB_RINGDATA_TABLE = '<name>_data'
+    DYNAMODB_REL_TABLE = '<name>_rel'
+    DYNAMODB_CHAT_TABLE = '<name>_chat'
+
+Enter random long strings in the CSRF and SECRET KEYS
+
+    CSRF_SESSION_KEY = '<xxxxx>'
+    SECRET_KEY = '<xxxxx>'
+
+Enter the region and cognito ids
+
+    COGNITO_REGION = '<us-xxxx-x>'
+    COGNITO_USERPOOL_ID = '<us-xxxx-1_xxxxxxx>'
+    COGNITO_APP_CLIENT_ID = '<xxxxx>'
+
+Enter the bucket name
+
+    S3_BUCKET_NAME = '<name>-xxxxx'
+
+
+In `tower/.env.development.*` and `tower/.env.production.*`
+
+Enter the region and cognito ids (again)
+
+    VITE_COGNITO_REGION='<us-xxxx-x>'
+    VITE_COGNITO_USERPOOL_ID='<us-xxxx-1_xxxxxxx>'
+    VITE_COGNITO_APP_CLIENT_ID='<xxxxx>'
 
 
 ### Step 4: Run the Zappa installer
@@ -227,13 +258,14 @@ Setup the API to accept custom domains
 
 Configure domain to point to API Gateway
 
-VERY IMPORTANT: The value of the CNAME should not be the GATEWAY URL but the CUSTOM DOMAIN URL. They look similar but they are not the same
 
 - To get the right value, go to API Gateway > Custom Domain Names 
-- Select the Custom Domain Name and look for "API Gateway domain name" copy and paste it as is
+- Select the Custom Domain Name and look for "API Gateway domain name" and copy it as is.
 - Go to Route53>Zones and Create a CNAME record:
 
 `NAME=<environment_name>`  `VALUE=<domain_name_api_id>.execute-api.<aws_region>.amazonaws.com>`
+
+VERY IMPORTANT: The value of the CNAME should not be the GATEWAY URL but the CUSTOM DOMAIN URL. They look similar but they are not the same
 
 - Save that record and almost immediately you'll be able to see your app in that subdomain. 
 

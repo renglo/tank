@@ -63,7 +63,8 @@ def deploy_environment(env_name: str, aws_profile: str, aws_region: str) -> Depl
     print("\nAdding default blueprints to DB...")
     result.status_blueprints = upload_blueprints.run(
         env_name=env_name,
-        aws_profile=aws_profile
+        aws_profile=aws_profile,
+        aws_region=aws_region
     )
 
     return result

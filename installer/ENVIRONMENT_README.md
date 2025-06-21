@@ -38,9 +38,12 @@ python deploy_environment.py <environment_name> --aws-region <aws_region>  --aws
 #### 5. NEXT STEPS
 The next step is to run the Zappa installer. Go back to the document ../CLOUD_README.md
 
-Bring with you the following information
+Bring with you the following information and the terminal output of the deploy_environment.py run
 a. <aws_region>
 b. <bucket_name>
+c. <cognito_user_pool_id>
+d. <cognito_app_client_id>
+
 
 
 
@@ -152,7 +155,7 @@ Role ARN : arn:aws:iam::1234567890:role/lquant_tt_role
 #### T5. Install the Default Blueprints
 
 ```
-python upload_blueprints.py <environment_name> --aws-profile <aws_profile>
+python upload_blueprints.py <environment_name> --aws-profile <aws_profile> --aws_region <aws_region>
 ```
 
 Example

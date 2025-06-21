@@ -42,7 +42,7 @@ class BlueprintModel:
                 items = response.get('Items', [])
                 
                 if len(items)==0:
-                    return {"message": "Document not found"}
+                    return {"success":False,"message": "Document not found"}
                 item = items[0]
                 #current_app.logger.info('items from DB:'+str(items))
                        
@@ -53,7 +53,7 @@ class BlueprintModel:
             if item:
                 return item
             else:
-                return {"message": "Document not found"}
+                return {"success":False,"message": "Document not found"}
         except ClientError as e:
             return {"error": e.response['Error']['Message']}
         
