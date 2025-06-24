@@ -64,7 +64,7 @@ if app.config['IS_LAMBDA']:
     CORS(app, resources={r"*": {"origins": [app.config['TANK_FE_BASE_URL']]}})
 else:
     app.logger.info('RUNNING ON LOCAL ENVIRONMENT')  
-    CORS(app, resources={r"/*": {"origins": ["http://127.0.0.1:5173", "http://localhost:5173"]}})
+    CORS(app, resources={r"/*": {"origins": ["http://127.0.0.1:5173", "http://localhost:5173", "http://127.0.0.1:3000"]}})
 
 
 # Initialize CognitoAuth
