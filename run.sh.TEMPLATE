@@ -1,0 +1,4 @@
+#!/bin/bash
+export AWS_PROFILE=<PROJECT>
+export AWS_DEFAULT_REGION=<REGION>
+flask run
