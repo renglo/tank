@@ -73,9 +73,30 @@ class DataController:
         )
         
         return jsonify(result), 201  # Return the created result with a 201 status code
+    
+    
+    
+    def sanitize(self,obj):
+        '''
+        Avoids Floats being sent to DynamoDB
+        '''
+        if isinstance(obj, list):
+            return [self.sanitize(x) for x in obj]
+        elif isinstance(obj, dict):
+            return {k: self.sanitize(v) for k, v in obj.items()}
+        elif isinstance(obj, Decimal):
+            # Convert Decimal to int if it's a whole number, otherwise float
+            return int(obj) if obj % 1 == 0 else float(obj)
+        elif isinstance(obj, float):
+            # Convert float to string
+            return str(obj)
+        elif isinstance(obj, int):
+            # Keep integers as is
+            return obj
+        else:
+            return obj
         
             
-        
     
     def generate_index_string_x(self,blueprint,item_values):
         # Check if blueprint has an "indexes" key
@@ -314,6 +335,9 @@ class DataController:
                     item_values[field['name']] = str(new_raw).strip()
                 else:
                     item_values[field['name']] = None
+                    
+                    
+            item_values[field['name']] = self.sanitize(item_values[field['name']])
 
 
         item = {}
@@ -469,6 +493,8 @@ class DataController:
 
         #6. Return to save document to DB
         #updated_item['modified'] = datetime.now().isoformat()
+        
+        updated_item = self.sanitize(updated_item)
 
         return updated_item
     
