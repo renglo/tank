@@ -331,7 +331,10 @@ Name: message_template
 }
 ```
 
-# DEPRCATED : DONT DO IT >> (Enable two-way communication in the HTTP integration)
+Add the name of the template ("message_template") to the Template selection expression
+
+IMPORTANT: Every time you make a change in the templates or routes, you need to click on "Deploy API" otherwise the changes won't reflect.
+
 
 -----------------
 Steps 1-4 could have been automatically done by running this command
