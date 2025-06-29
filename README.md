@@ -297,6 +297,7 @@ You need to install the libraries used by the tools in the /tools folder.
 cd ../tools
 npm install recharts
 npm install lucide-react
+npm install react-resizable-panels
 ```
 
 This will automatically create the `node_modules` folder and the files `package-lock.json`, `package.json` and `tscongif.json`
