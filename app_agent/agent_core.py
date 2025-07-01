@@ -58,28 +58,23 @@ class AgentCore:
     def __init__(self):
         
         #OpenAI Client
-        #if True:
-        try:   
-            
+        try:    
             openai_client = OpenAI(api_key=OPENAI_API_KEY,)
             print(f"OpenAI client initialized")
-            #print(OPENAI_API_KEY)
-        #else:
         except Exception as e:
             print(f"Error initializing OpenAI client: {e}")
-            #print(OPENAI_API_KEY)
             openai_client = None
-            
-        self.DAC = DataController()
-        self.DCC = DocsController()
-        self.CHC = ChatController()
-        self.SHC = SchdController()
-        
-        
+
         self.AI_1 = openai_client
         #self.AI_1_MODEL = "gpt-4" // This model does not support json_object response format
         self.AI_1_MODEL = "gpt-3.5-turbo" # Baseline model. Good for multi-step chats
         self.AI_2_MODEL = "gpt-4o-mini" # This model is not very smart
+        
+        
+        self.DAC = DataController()
+        self.DCC = DocsController()
+        self.CHC = ChatController()
+        self.SHC = SchdController()
         
         try:
         
@@ -1045,9 +1040,11 @@ class AgentCore:
         
         action = 'interpret'
         self.print_chat('Interpreting message...', 'text')
+        print('interpret')
         
         try:
             message_list = self._get_context().message_history
+            
             
             # Get current time and date
             current_time = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
@@ -1062,13 +1059,14 @@ class AgentCore:
             action_instructions = '' 
             action_tools = []
             list_actions = self._get_context().list_actions
+            
             for a in list_actions:
                 if a['key'] == current_action:
                     action_instructions = a['prompt_3_reasoning_and_planning']
                     if 'tools_reference' in a and a['tools_reference'] and a['tools_reference'] not in ['_','-','.']: 
                         action_tools = a['tools_reference']
                     break
-                            
+
             # Belief  
             current_beliefs = workspace.get('state', {}).get('beliefs', {}) if workspace else {}
             belief_str = 'Current beliefs: ' + self.string_from_object(current_beliefs)
@@ -1129,30 +1127,50 @@ class AgentCore:
               
             list_tools_raw = self._get_context().list_tools
             
-            #print(f'List Tools:{list_tools_raw}')
+            print(f'List Tools:{list_tools_raw}')
             
             list_tools = [] 
             for t in list_tools_raw:
                 # Parse the escaped JSON string into a Python object
                 try:
-                    tool_input = json.loads(t.get('input', '{}'))
+                    tool_input = json.loads(t.get('input', '[]'))
                 except json.JSONDecodeError:
-                    print(f"Warning: Invalid JSON in tool input for tool {t.get('key', 'unknown')}. Using empty object.")
-                    tool_input = {}
+                    print(f"Warning: Invalid JSON in tool input for tool {t.get('key', 'unknown')}. Using empty array.")
+                    tool_input = []
                 
                 dict_params = {}
-                for key, val in tool_input.items():
-                    dict_params[key] = {'type':'string','description':val}
+                required_params = []
+                
+                # Handle new format: array of objects with name, hint, required
+                if isinstance(tool_input, list):
+                    for param in tool_input:
+                        if isinstance(param, dict) and 'name' in param and 'hint' in param:
+                            param_name = param['name']
+                            param_hint = param['hint']
+                            param_required = param.get('required', False)
+                            
+                            dict_params[param_name] = {
+                                'type': 'string',
+                                'description': param_hint
+                            }
+                            
+                            if param_required:
+                                required_params.append(param_name)
+                # Handle old format for backward compatibility
+                elif isinstance(tool_input, dict):
+                    for key, val in tool_input.items():
+                        dict_params[key] = {'type': 'string', 'description': val}
+                        required_params.append(key)
                     
                 tool = {
-                    'type':'function',
-                    'function':{
-                        'name':t.get('key', ''),
-                        'description':t.get('goal', ''),
-                        'parameters':{
-                            'type':'object',
-                            'properties':dict_params,
-                            'required': list(tool_input.keys())
+                    'type': 'function',
+                    'function': {
+                        'name': t.get('key', ''),
+                        'description': t.get('goal', ''),
+                        'parameters': {
+                            'type': 'object',
+                            'properties': dict_params,
+                            'required': required_params
                         }
                     }    
                 }
@@ -1301,6 +1319,7 @@ class AgentCore:
                 return {'success':False,'action':action,'input':params,'output':response}
 
             clean_output = response['output']['output']['output'][0]['output']
+
             clean_output_str = json.dumps(clean_output)
             
             
@@ -1312,6 +1331,9 @@ class AgentCore:
                     "content": clean_output_str,
                     "tool_calls":False
                 }
+            
+            if 'display_directly' in clean_output:
+                tool_out['display_directly'] = True
             
             print(f'flag2')
             
