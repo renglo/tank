@@ -8,6 +8,7 @@ import uuid
 import re
 import json, collections
 import boto3
+from decimal import Decimal
 
 from app_data.data_model import DataModel
 from app_blueprint.blueprint_controller import BlueprintController
@@ -72,9 +73,30 @@ class DataController:
         )
         
         return jsonify(result), 201  # Return the created result with a 201 status code
+    
+    
+    
+    def sanitize(self,obj):
+        '''
+        Avoids Floats being sent to DynamoDB
+        '''
+        if isinstance(obj, list):
+            return [self.sanitize(x) for x in obj]
+        elif isinstance(obj, dict):
+            return {k: self.sanitize(v) for k, v in obj.items()}
+        elif isinstance(obj, Decimal):
+            # Convert Decimal to int if it's a whole number, otherwise float
+            return int(obj) if obj % 1 == 0 else float(obj)
+        elif isinstance(obj, float):
+            # Convert float to string
+            return str(obj)
+        elif isinstance(obj, int):
+            # Keep integers as is
+            return obj
+        else:
+            return obj
         
             
-        
     
     def generate_index_string_x(self,blueprint,item_values):
         # Check if blueprint has an "indexes" key
@@ -249,14 +271,35 @@ class DataController:
             else:
                 current_app.logger.debug('Inserting default value for field '+str(field['name'])+': '+str(field['default']))
                 # Instead of skipping we put the field's default value
-                item_values[field['name']] = field['default']
-                continue
+                new_raw = field['default']
+                
 
             if field['type'] == 'object':
                 try:
-                    item_values[field['name']] = json.loads(new_raw.strip())
+                    if isinstance(new_raw, dict):
+                        item_values[field['name']] = new_raw
+                    else:
+                        item_values[field['name']] = json.loads(new_raw.strip())
                 except:
-                    item_values[field['name']] = str(new_raw).strip()
+                    if new_raw == '':
+                        item_values[field['name']] = {}
+                    else:
+                        item_values[field['name']] = str(new_raw).strip()
+                    
+            
+            elif field['type'] == 'array':
+                try:
+                    if isinstance(new_raw, list):
+                        item_values[field['name']] = new_raw
+                    else:
+                        item_values[field['name']] = json.loads(new_raw.strip())
+                except:
+                    if new_raw == '':
+                        item_values[field['name']] = []
+                    else:
+                        item_values[field['name']] = str(new_raw).strip()
+                    
+                    
             elif field['type'] == 'timestamp':
                 new_raw = new_raw.strip()
                 try:
@@ -280,11 +323,21 @@ class DataController:
                         item_values[field['name']] = int(date_value.timestamp() * 1000)  # Convert to milliseconds
                     except ValueError:
                         item_values[field['name']] = None  # Handle invalid date format
+            
+            elif field['type'] == 'string':
+                if new_raw:
+                    item_values[field['name']] = str(new_raw).strip()
+                else:
+                    item_values[field['name']] = ''
+                
             else:
                 if new_raw:
                     item_values[field['name']] = str(new_raw).strip()
                 else:
                     item_values[field['name']] = None
+                    
+                    
+            item_values[field['name']] = self.sanitize(item_values[field['name']])
 
 
         item = {}
@@ -374,35 +427,54 @@ class DataController:
                 # Attribute exists in the blueprint
                 new_raw = payload.get(field['name'])
 
-                '''
-                len>0  |  field['required']  | AND   |  (len > 0) OR (AND)
-                ---------------------------------------------
-                True   |   False             | False |  True
-                ---------------------------------------------
-                True   |   True              | True  |  True
-                ---------------------------------------------
-                False  |   False             | True  |  -
-                ---------------------------------------------
-                False  |   True              | False |  False
-
-
+               
+                if field['type'] == 'object':
+                    
+                    try:
+                        updated_item['attributes'][field['name']] = json.loads(new_raw.strip())
+                        putNeeded = True
+                    except:
+                        updated_item['attributes'][field['name']] = str(new_raw).strip()
+                        putNeeded = True
                 
-                '''
-
-                if len(str(new_raw)) > 0 or (len(str(new_raw)) and field['required']) :
-
-                    current_app.logger.debug('Field OK:'+field['name']) 
-                    #Attribute complies with "Required" prerequisite
-
-                    #5.Update attributes based on what has been sent in the request
-                    updated_item['attributes'][field['name']] = new_raw
-                    putNeeded = True
-
-                    #break
-
+                elif field['type'] == 'array':
+                    
+                    try:
+                        updated_item['attributes'][field['name']] = json.loads(new_raw.strip())
+                        putNeeded = True
+                    except:
+                        updated_item['attributes'][field['name']] = str(new_raw).strip()
+                        putNeeded = True
+                
                 else:
-                    current_app.logger.debug('Attribute is required:'+field['name']) 
-                    return {'error':'Attribute is required'}
+                    
+                    '''
+                        len>0  |  field['required']  | AND   |  (len > 0) OR (AND)
+                        ---------------------------------------------
+                        True   |   False             | False |  True
+                        ---------------------------------------------
+                        True   |   True              | True  |  True
+                        ---------------------------------------------
+                        False  |   False             | True  |  -
+                        ---------------------------------------------
+                        False  |   True              | False |  False
+
+                    '''
+
+                    if len(str(new_raw)) > 0 or (len(str(new_raw)) and field['required']):
+
+                        current_app.logger.debug('Field OK:'+field['name']) 
+                        #Attribute complies with "Required" prerequisite
+
+                        #5.Update attributes based on what has been sent in the request
+                        updated_item['attributes'][field['name']] = new_raw
+                        putNeeded = True
+
+                        #break
+
+                    else:
+                        current_app.logger.debug('Attribute is required:'+field['name']) 
+                        return {'error':'Attribute is required'}
                   
         if not putNeeded:
             return {'error':'Attributes not recognized'}
@@ -421,6 +493,8 @@ class DataController:
 
         #6. Return to save document to DB
         #updated_item['modified'] = datetime.now().isoformat()
+        
+        updated_item = self.sanitize(updated_item)
 
         return updated_item
     

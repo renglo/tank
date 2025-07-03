@@ -275,208 +275,248 @@ class AuthController:
         #current_app.logger.debug('User Teams:'+str(rels_user_teams))
 
         # 2. For each rel, get its team:portfolio rel. Each rel will show a Portfolio_id
-        for team in rels_user_teams['document']['items']:
+        # Check if rels_user_teams has the expected structure and is not empty
+        if (rels_user_teams and 
+            'document' in rels_user_teams and 
+            'items' in rels_user_teams['document'] and 
+            rels_user_teams['document']['items']):
             
-            team_id =  team['rel'] 
-            current_app.logger.debug('FLAG0>>TEAM:'+team_id)     
-            
-            index = 'irn:rel:team:portfolio:' + team['rel'] + ':*'
-            rels_team_portfolio = self.AUM.list_rel(index)
-            #current_app.logger.debug('User Portfolios:'+str(rels_team_portfolio))
-
-            for portfolio in rels_team_portfolio['document']['items']:
-
-                portfolio_id = portfolio['rel']
-                current_app.logger.debug('FLAG1>>TEAM:'+team_id+'PORTFOLIO:'+portfolio_id)
-
-                if portfolio_id not in tree['portfolios']:
-
-                    #RESOLVE: Get Portfolio entity document
-                    portfolio_entity = self.get_entity(
-                        'portfolio',
-                        portfolio_id=portfolio_id
-                        )
-
-                    portfolio_doc = {}  
-                    portfolio_doc['portfolio_id'] = portfolio_id      
-                    portfolio_doc['name'] = portfolio_entity['document']['name']
-                    portfolio_doc['teams'] = {}
-                    portfolio_doc['orgs'] = {}
-
-                    #current_app.logger.debug('Tree: '+str(tree))
-
-                    #current_app.logger.debug('Inserting Portfolio '+portfolio_id+' in tree'+str(portfolio_doc))
-                    tree['portfolios'][portfolio_id] = portfolio_doc
-
-                    #current_app.logger.debug('Tree: '+str(tree))
-                    
-
-                #Teams
-                #Include Team Document in the tree under the current portfolio
-
-                #RESOLVE: Get Team entity document
-                team_entity = self.get_entity(
-                    'team',
-                    portfolio_id=portfolio_id,
-                    team_id=team_id
-                    )
+            for team in rels_user_teams['document']['items']:
                 
-                if not team_entity['success']:
-                    # Entity doesn't exist
-                    # skip the team relationships
-                    continue
+                team_id =  team['rel'] 
+                current_app.logger.debug('FLAG0>>TEAM:'+team_id)     
                 
-                team_doc = {}
-                team_doc['team_id'] = team_id
-                team_doc['name'] = team_entity['document']['name']
-                #team_doc['orgs_access'] = []
-                team_doc['tools'] = {}
+                index = 'irn:rel:team:portfolio:' + team['rel'] + ':*'
+                rels_team_portfolio = self.AUM.list_rel(index)
+                #current_app.logger.debug('User Portfolios:'+str(rels_team_portfolio))
 
-                #current_app.logger.debug('Inserting Team '+team_id+'in portfolio '+portfolio_id+':'+str(team_doc))
-                tree['portfolios'][portfolio_id]['teams'][team_id] = team_doc
+                # Check if rels_team_portfolio has the expected structure and is not empty
+                if (rels_team_portfolio and 
+                    'document' in rels_team_portfolio and 
+                    'items' in rels_team_portfolio['document'] and 
+                    rels_team_portfolio['document']['items']):
 
+                    for portfolio in rels_team_portfolio['document']['items']:
 
-                
-                #Team to Tools rel
-                index = 'irn:rel:team:tool:' + team_id + ':*'
-                rels_team_tool = self.AUM.list_rel(index)
-                #current_app.logger.debug('Team Tool rels:'+str(rels_team_org))
+                        portfolio_id = portfolio['rel']
+                        current_app.logger.debug('FLAG1>>TEAM:'+team_id+'PORTFOLIO:'+portfolio_id)
 
-                tools = []
-                for tool in rels_team_tool['document']['items']:
-                    tools.append(tool['rel'])
+                        if portfolio_id not in tree['portfolios']:
 
-                #current_app.logger.debug('Inserting tool into team '+team_id+' from portfolio '+portfolio_id+':'+str(tools))
-                tree['portfolios'][portfolio_id]['teams'][team_id]['tools_access'] = tools
+                            #RESOLVE: Get Portfolio entity document
+                            portfolio_entity = self.get_entity(
+                                'portfolio',
+                                portfolio_id=portfolio_id
+                                )
 
+                            portfolio_doc = {}  
+                            portfolio_doc['portfolio_id'] = portfolio_id      
+                            portfolio_doc['name'] = portfolio_entity['document']['name']
+                            portfolio_doc['teams'] = {}
+                            portfolio_doc['orgs'] = {}
 
-                 
+                            #current_app.logger.debug('Tree: '+str(tree))
 
-                #Tools
+                            #current_app.logger.debug('Inserting Portfolio '+portfolio_id+' in tree'+str(portfolio_doc))
+                            tree['portfolios'][portfolio_id] = portfolio_doc
 
-                # RESOLVE: Get App entity document
-                index = 'irn:entity:portfolio/tool:'+portfolio_id+'/*'
-                entities_tools = self.AUM.list_entity(index)
-                active_orgs = []
-                
-                
-
-                #current_app.logger.debug('ENTITIES:'+str(entities_tools))
-                org_tools = {}
-                
-                for tool in entities_tools['document']['items']:
-
-                    tool_id = tool['_id'] 
-                    current_app.logger.debug('FLAG2>>TEAM:'+team_id+'PORTFOLIO:'+portfolio_id+'TOOL:'+tool_id) 
-                   
-                    # Tool list at portfolio level
-                    if 'tools' not in tree['portfolios'][portfolio_id]:
-                        tree['portfolios'][portfolio_id]['tools'] = {}  # Create 'tools' as an empty dictionary
-                        
-                    if tool_id not in tree['portfolios'][portfolio_id]['tools']:
-                        tree['portfolios'][portfolio_id]['tools'][tool_id] = {}
-                        
-                    
-                    tree['portfolios'][portfolio_id]['tools'][tool_id]['tool_id'] = tool_id
-                    tree['portfolios'][portfolio_id]['tools'][tool_id]['name'] = tool['name']
-                    tree['portfolios'][portfolio_id]['tools'][tool_id]['handle'] = tool['handle']
-
-                    
-                    if 'tools' not in tree['portfolios'][portfolio_id]['teams'][team_id]:
-                        tree['portfolios'][portfolio_id]['teams'][team_id]['tools'] = {}
-                        
-                    if tool_id not in tree['portfolios'][portfolio_id]['teams'][team_id]['tools']:
-                        tree['portfolios'][portfolio_id]['teams'][team_id]['tools'][tool_id] = {}
-                        
-                                   
-                    #Team Tool Roles
-                    index = 'irn:rel:team/tool:role:' + team_id + '/' + tool_id + ':*'
-                    rels_team_tool_role = self.AUM.list_rel(index)
-                    
-                    roles = []
-                    for role in rels_team_tool_role['document']['items']:
-                        roles.append(role['rel'])
-                        
-                      
-                    tree['portfolios'][portfolio_id]['teams'][team_id]['tools'][tool_id]['roles'] = roles
-                    
-                    #Team Tool Orgs
-                    index = 'irn:rel:team/tool:org:' + team_id + '/' + tool_id + ':*'
-                    rels_team_tool_org = self.AUM.list_rel(index)
-                    
-                    toolorgs = []
-                    
-                    for toolorg in rels_team_tool_org['document']['items']:
-                        
-                        current_app.logger.debug('FLAG3>>TEAM:'+team_id+'PORTFOLIO:'+portfolio_id+'TOOL:'+tool_id+'TORG:'+toolorg['rel']) 
-                        
-                        
-                        #current_app.logger.debug('TOOORG:'+toolorg['rel']) 
-                        
-                        
-                        toolorgs.append(toolorg['rel'])
-                        #If there is a team/tool:org rel, the building is active, 
-                        active_orgs.append(toolorg['rel'])
-                         
-                        tree['portfolios'][portfolio_id]['tools'][tool_id]['active'] = True
-                        
-                        #Strategy: 
-                        # 1. Each iteration here tells you whether a team is using a specific tool in a specific organization
-                        # 2. We are going to accumulate that in org_tools and then put it in the tree
-                        
-                        # 3. We check if the org array already exists. We create it if it doesn't
-                        if toolorg['rel'] not in org_tools:
-                            org_tools[toolorg['rel']] = []
-                        #4. We append the tool to the org
-                        org_tools[toolorg['rel']].append(tool_id)
-                        
-                        
-                        
-                        
-                    
+                            #current_app.logger.debug('Tree: '+str(tree))
                             
-                    tree['portfolios'][portfolio_id]['teams'][team_id]['tools'][tool_id]['orgs'] = toolorgs
-                    
-                
-                current_app.logger.debug('ORG_TOOLS:') 
-                current_app.logger.debug(org_tools) 
-                
-                  
-                #Orgs
-                index = 'irn:entity:portfolio/org:'+portfolio_id+'/*'
-                entities_orgs = self.AUM.list_entity(index)
 
-                for org in entities_orgs['document']['items']:
+                        #Teams
+                        #Include Team Document in the tree under the current portfolio
 
-                    org_id = org['_id']
-                    
-                   
-                    # Assemble the orgs object
-                    if 'orgs' not in tree['portfolios'][portfolio_id]:
-                        tree['portfolios'][portfolio_id]['orgs'] = {}
+                        #RESOLVE: Get Team entity document
+                        team_entity = self.get_entity(
+                            'team',
+                            portfolio_id=portfolio_id,
+                            team_id=team_id
+                            )
+                        
+                        if not team_entity['success']:
+                            # Entity doesn't exist
+                            # skip the team relationships
+                            continue
+                        
+                        team_doc = {}
+                        team_doc['team_id'] = team_id
+                        team_doc['name'] = team_entity['document']['name']
+                        #team_doc['orgs_access'] = []
+                        team_doc['tools'] = {}
+
+                        #current_app.logger.debug('Inserting Team '+team_id+'in portfolio '+portfolio_id+':'+str(team_doc))
+                        tree['portfolios'][portfolio_id]['teams'][team_id] = team_doc
+
+
+                        
+                        #Team to Tools rel
+                        index = 'irn:rel:team:tool:' + team_id + ':*'
+                        rels_team_tool = self.AUM.list_rel(index)
+                        #current_app.logger.debug('Team Tool rels:'+str(rels_team_org))
+
+                        tools = []
+                        # Check if rels_team_tool has the expected structure and is not empty
+                        if (rels_team_tool and 
+                            'document' in rels_team_tool and 
+                            'items' in rels_team_tool['document'] and 
+                            rels_team_tool['document']['items']):
+                            for tool in rels_team_tool['document']['items']:
+                                tools.append(tool['rel'])
+
+                        #current_app.logger.debug('Inserting tool into team '+team_id+' from portfolio '+portfolio_id+':'+str(tools))
+                        tree['portfolios'][portfolio_id]['teams'][team_id]['tools_access'] = tools
+
+
+                         
+
+                        #Tools
+
+                        # RESOLVE: Get App entity document
+                        index = 'irn:entity:portfolio/tool:'+portfolio_id+'/*'
+                        entities_tools = self.AUM.list_entity(index)
+                        active_orgs = []
                         
                         
-                    if org_id not in tree['portfolios'][portfolio_id]['orgs']:
-                        tree['portfolios'][portfolio_id]['orgs'][org_id] = {}
+
+                        #current_app.logger.debug('ENTITIES:'+str(entities_tools))
+                        org_tools = {}
                         
-                    
-                    if 'tools' not in tree['portfolios'][portfolio_id]['orgs'][org_id]:
-                        tree['portfolios'][portfolio_id]['orgs'][org_id]['tools'] = []
-                    
-                    if org_id in org_tools:    
-                        # Combine the existing tools with the new tools from org_tools
-                        tree['portfolios'][portfolio_id]['orgs'][org_id]['tools'] = list(set(tree['portfolios'][portfolio_id]['orgs'][org_id]['tools'] + org_tools[org_id]))
-                    
-                    tree['portfolios'][portfolio_id]['orgs'][org_id]['org_id'] = org_id
-                    tree['portfolios'][portfolio_id]['orgs'][org_id]['name'] = org['name']
-                    tree['portfolios'][portfolio_id]['orgs'][org_id]['handle'] = org['handle']
-                    
-                    
-                    if org_id in active_orgs:
-                        tree['portfolios'][portfolio_id]['orgs'][org_id]['active'] = True     
-                    #else:
-                    #    tree['portfolios'][portfolio_id]['orgs'][org_id]['active'] = False 
-                    
+                        # Check if entities_tools has the expected structure and is not empty
+                        if (entities_tools and 
+                            'document' in entities_tools and 
+                            'items' in entities_tools['document'] and 
+                            entities_tools['document']['items']):
+                            
+                            for tool in entities_tools['document']['items']:
+
+                                tool_id = tool['_id'] 
+                                current_app.logger.debug('FLAG2>>TEAM:'+team_id+'PORTFOLIO:'+portfolio_id+'TOOL:'+tool_id) 
+                               
+                                # Tool list at portfolio level
+                                if 'tools' not in tree['portfolios'][portfolio_id]:
+                                    tree['portfolios'][portfolio_id]['tools'] = {}  # Create 'tools' as an empty dictionary
+                                    
+                                if tool_id not in tree['portfolios'][portfolio_id]['tools']:
+                                    tree['portfolios'][portfolio_id]['tools'][tool_id] = {}
+                                    
+                                
+                                tree['portfolios'][portfolio_id]['tools'][tool_id]['tool_id'] = tool_id
+                                tree['portfolios'][portfolio_id]['tools'][tool_id]['name'] = tool['name']
+                                tree['portfolios'][portfolio_id]['tools'][tool_id]['handle'] = tool['handle']
+
+                                
+                                if 'tools' not in tree['portfolios'][portfolio_id]['teams'][team_id]:
+                                    tree['portfolios'][portfolio_id]['teams'][team_id]['tools'] = {}
+                                    
+                                if tool_id not in tree['portfolios'][portfolio_id]['teams'][team_id]['tools']:
+                                    tree['portfolios'][portfolio_id]['teams'][team_id]['tools'][tool_id] = {}
+                                    
+                                           
+                                #Team Tool Roles
+                                index = 'irn:rel:team/tool:role:' + team_id + '/' + tool_id + ':*'
+                                rels_team_tool_role = self.AUM.list_rel(index)
+                                
+                                roles = []
+                                # Check if rels_team_tool_role has the expected structure and is not empty
+                                if (rels_team_tool_role and 
+                                    'document' in rels_team_tool_role and 
+                                    'items' in rels_team_tool_role['document'] and 
+                                    rels_team_tool_role['document']['items']):
+                                    for role in rels_team_tool_role['document']['items']:
+                                        roles.append(role['rel'])
+                                        
+                                  
+                                tree['portfolios'][portfolio_id]['teams'][team_id]['tools'][tool_id]['roles'] = roles
+                                
+                                #Team Tool Orgs
+                                index = 'irn:rel:team/tool:org:' + team_id + '/' + tool_id + ':*'
+                                rels_team_tool_org = self.AUM.list_rel(index)
+                                
+                                toolorgs = []
+                                
+                                # Check if rels_team_tool_org has the expected structure and is not empty
+                                if (rels_team_tool_org and 
+                                    'document' in rels_team_tool_org and 
+                                    'items' in rels_team_tool_org['document'] and 
+                                    rels_team_tool_org['document']['items']):
+                                    
+                                    for toolorg in rels_team_tool_org['document']['items']:
+                                        
+                                        current_app.logger.debug('FLAG3>>TEAM:'+team_id+'PORTFOLIO:'+portfolio_id+'TOOL:'+tool_id+'TORG:'+toolorg['rel']) 
+                                        
+                                        
+                                        #current_app.logger.debug('TOOORG:'+toolorg['rel']) 
+                                        
+                                        
+                                        toolorgs.append(toolorg['rel'])
+                                        #If there is a team/tool:org rel, the building is active, 
+                                        active_orgs.append(toolorg['rel'])
+                                         
+                                        tree['portfolios'][portfolio_id]['tools'][tool_id]['active'] = True
+                                        
+                                        #Strategy: 
+                                        # 1. Each iteration here tells you whether a team is using a specific tool in a specific organization
+                                        # 2. We are going to accumulate that in org_tools and then put it in the tree
+                                        
+                                        # 3. We check if the org array already exists. We create it if it doesn't
+                                        if toolorg['rel'] not in org_tools:
+                                            org_tools[toolorg['rel']] = []
+                                        #4. We append the tool to the org
+                                        org_tools[toolorg['rel']].append(tool_id)
+                                        
+                                        
+                                        
+                                        
+                                    
+                                        
+                                tree['portfolios'][portfolio_id]['teams'][team_id]['tools'][tool_id]['orgs'] = toolorgs
+                                
+                            
+                        current_app.logger.debug('ORG_TOOLS:') 
+                        current_app.logger.debug(org_tools) 
+                        
+                          
+                        #Orgs
+                        index = 'irn:entity:portfolio/org:'+portfolio_id+'/*'
+                        entities_orgs = self.AUM.list_entity(index)
+
+                        # Check if entities_orgs has the expected structure and is not empty
+                        if (entities_orgs and 
+                            'document' in entities_orgs and 
+                            'items' in entities_orgs['document'] and 
+                            entities_orgs['document']['items']):
+
+                            for org in entities_orgs['document']['items']:
+
+                                org_id = org['_id']
+                                
+                               
+                                # Assemble the orgs object
+                                if 'orgs' not in tree['portfolios'][portfolio_id]:
+                                    tree['portfolios'][portfolio_id]['orgs'] = {}
+                                    
+                                    
+                                if org_id not in tree['portfolios'][portfolio_id]['orgs']:
+                                    tree['portfolios'][portfolio_id]['orgs'][org_id] = {}
+                                    
+                                
+                                if 'tools' not in tree['portfolios'][portfolio_id]['orgs'][org_id]:
+                                    tree['portfolios'][portfolio_id]['orgs'][org_id]['tools'] = []
+                                
+                                if org_id in org_tools:    
+                                    # Combine the existing tools with the new tools from org_tools
+                                    tree['portfolios'][portfolio_id]['orgs'][org_id]['tools'] = list(set(tree['portfolios'][portfolio_id]['orgs'][org_id]['tools'] + org_tools[org_id]))
+                                
+                                tree['portfolios'][portfolio_id]['orgs'][org_id]['org_id'] = org_id
+                                tree['portfolios'][portfolio_id]['orgs'][org_id]['name'] = org['name']
+                                tree['portfolios'][portfolio_id]['orgs'][org_id]['handle'] = org['handle']
+                                
+                                
+                                if org_id in active_orgs:
+                                    tree['portfolios'][portfolio_id]['orgs'][org_id]['active'] = True     
+                                #else:
+                                #    tree['portfolios'][portfolio_id]['orgs'][org_id]['active'] = False 
+                                
 
 
         response = {}

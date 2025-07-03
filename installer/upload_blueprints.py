@@ -91,17 +91,17 @@ def upload_blueprints(dynamodb, table_name: str, blueprints: List[Dict]) -> Dict
 
     return results
 
-def run(env_name: str, aws_profile: str, region: str = None) -> Dict[str, List[str]]:
+def run(env_name: str, aws_profile: str, aws_region: str = None) -> Dict[str, List[str]]:
     """Programmatic entry point that returns structured data"""
     # Get region from profile if not specified
-    if region is None:
-        region = get_profile_region(aws_profile)
+    if aws_region is None:
+        aws_region = get_profile_region(aws_profile)
 
     # Initialize Boto3 Session with selected profile and region
     boto3.setup_default_session(profile_name=aws_profile)
-    dynamodb = boto3.resource("dynamodb", region_name=region)
+    dynamodb = boto3.resource("dynamodb", region_name=aws_region)
 
-    print(f"🔄 Using AWS Profile: {aws_profile} in region {region}")
+    print(f"🔄 Using AWS Profile: {aws_profile} in region {aws_region}")
     
     # Load blueprints from JSON files
     print("📂 Loading blueprint files...")

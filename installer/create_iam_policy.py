@@ -120,6 +120,18 @@ def create_iam_policy(env_name, cognito_user_pool_id, aws_region, aws_profile):
     # Policy Name
     policy_name = f"{env_name}_tt_policy"
 
+    # Check if policy already exists
+    try:
+        existing_policy = iam_client.get_policy(PolicyArn=f"arn:aws:iam::{aws_account_id}:policy/{policy_name}")
+        policy_arn = existing_policy["Policy"]["Arn"]
+        print(f"✅ IAM Policy '{policy_name}' already exists. Skipping creation.")
+        print(f"🔹 Policy Name: {policy_name}")
+        print(f"🔹 Policy ARN: {policy_arn}")
+        return policy_name, policy_arn, s3_bucket_name
+    except iam_client.exceptions.NoSuchEntityException:
+        # Policy doesn't exist, proceed with creation
+        pass
+
     # Create IAM Policy
     response = iam_client.create_policy(
         PolicyName=policy_name,
