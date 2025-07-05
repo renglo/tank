@@ -95,6 +95,11 @@ def create_iam_policy(env_name, cognito_user_pool_id, aws_region, aws_profile):
             },
             {
                 "Effect": "Allow",
+                "Action": "events:PutEvents",
+                "Resource": f"arn:aws:events:{aws_region}:{aws_account_id}:event-bus/default"
+            },
+            {
+                "Effect": "Allow",
                 "Action": "iam:PassRole",
                 "Resource": f"arn:aws:iam::{aws_account_id}:role/*",
                 "Condition": {

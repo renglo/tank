@@ -235,253 +235,288 @@ def chat_tb():
     return response
 
 
-
-
-def validate_gupshup_payload(payload: dict) -> tuple[bool, str]:
+def extract_gupshup_payload(payload):
     """
-    Validates that the Gupshup payload follows the expected format.
+    Extract required data from Gupshup webhook payload.
     
     Args:
-        payload (dict): The payload to validate
+        payload (dict): The raw Gupshup webhook payload
         
     Returns:
-        tuple[bool, str]: (is_valid, error_message)
+        dict: Extracted data with keys: message, timestamp, sender_name, sender_id, app_id
+        or tuple: (False, error_message) if extraction fails
     """
-    # Check top level required fields
-    required_fields = ['app', 'timestamp', 'version', 'type', 'payload']
-    for field in required_fields:
-        if field not in payload:
-            return False, f"Missing required field: {field}"
+    try:
+        # Validate top-level structure
+        if 'entry' not in payload or not payload['entry']:
+            return False, "Missing 'entry' field in payload"
         
-    result = ()
-    
-    # Validate top level field types
-    if not isinstance(payload['app'], str):
-        return False, "Field 'app' must be a string"
-    if not isinstance(payload['timestamp'], (int, float)):
-        return False, "Field 'timestamp' must be a number"
-    if not isinstance(payload['version'], (int, float)):
-        return False, "Field 'version' must be a number"
-    if not isinstance(payload['type'], str):
-        return False, "Field 'type' must be a string"
-    if not isinstance(payload['payload'], dict):
-        return False, "Field 'payload' must be an object"
-    
-    # Validate payload object
-    payload_obj = payload['payload']
-    required_payload_fields = ['id', 'source', 'type', 'sender']
-    for field in required_payload_fields:
-        if field not in payload_obj:
-            return False, f"Missing required field in payload: {field}"
-    
-    # Validate payload field types
-    if not isinstance(payload_obj['id'], str):
-        return False, "Field 'payload.id' must be a string"
-    if not isinstance(payload_obj['source'], str):
-        return False, "Field 'payload.source' must be a string"
-    if not isinstance(payload_obj['type'], str):
-        return False, "Field 'payload.type' must be a string"
-    
-    # Validate message type
-    valid_types = ['text', 'image', 'file', 'audio', 'video', 'contact', 'location', 'button_reply', 'list_reply']
-    if payload_obj['type'] not in valid_types:
-        return False, f"Invalid message type. Must be one of: {', '.join(valid_types)}"
-    
-    # Validate sender object
-    if not isinstance(payload_obj['sender'], dict):
-        return False, "Field 'payload.sender' must be an object"
-    
-    sender = payload_obj['sender']
-    required_sender_fields = ['phone', 'name', 'country_code', 'dial_code']
-    for field in required_sender_fields:
-        if field not in sender:
-            return False, f"Missing required field in sender: {field}"
-        if not isinstance(sender[field], str):
-            return False, f"Field 'payload.sender.{field}' must be a string"
-    
-    # Validate context if present
-    if 'context' in payload_obj:
-        if not isinstance(payload_obj['context'], dict):
-            return False, "Field 'payload.context' must be an object"
-        context = payload_obj['context']
-        if 'id' not in context or not isinstance(context['id'], str):
-            return False, "Field 'payload.context.id' must be a string"
-        if 'gsId' not in context or not isinstance(context['gsId'], str):
-            return False, "Field 'payload.context.gsId' must be a string"
-    
-    return True, ""
-
-
-
-
-# PROTOTYPE FUNCTION. IT CONTAINS MANY HARDCODED DEPENDENCIES
-@app_chat.route('/gs_in/<string:portfolio>/<string:tool_id>', methods=['POST'])
-@cognito_auth_required
-def gupshup_in(portfolio,tool_id):
-    
-    
-    entity_id = ''
-    thread_id = ''
-    
-    result = []
-    
-    '''
-    EXAMPLE OF GUPSHUP INBOUND MESSAGE
-    It states that a customer has sent a message to your WhatsApp Business API phone number. 
-     
-        {   
-            "app": "DemoApp", 
-            "timestamp": 1580227766370,   
-            "version": 2, 
-            "type": "message",    
-            "payload": {  
-                "id": "ABEGkYaYVSEEAhAL3SLAWwHKeKrt6s3FKB0c",   
-                "source": "918x98xx21x4",   
-                "type": "text"|"image"|"file"|"audio"|"video"|"contact"|"location"|"button_reply"|"list_reply", 
-                "payload": {    
-                // Varies according to the type of payload.    
-                },  
-                "sender": { 
-                "phone": "918x98xx21x4",  
-                "name": "Drew",   
-                "country_code": "91", 
-                "dial_code": "8x98xx21x4" 
-                },  
-                "context": {    
-                "id": "gBEGkYaYVSEEAgnPFrOLcjkFjL8",  
-                "gsId": "9b71295f-f7af-4c1f-b2b4-31b4a4867bad"    
-                }   
-            } 
-        }
-    '''
-    
-    gupshup_payload = request.get_json()
-    valid,state = validate_gupshup_payload(gupshup_payload)
-    if not valid:
-        return {'success':False,'output':state}
-    
-    
-    msg_content = gupshup_payload['payload']['payload']['message']
-    msg_timestamp = gupshup_payload['timestamp']
-    msg_sender = gupshup_payload['payload']['source'] # This is the sender number
-
-
-    # The origin_number in the route will help you identify portfolio_id,
-    # The origin number will help you identify org_id if the number is unique for that org. 
-    # Otherwise, the agent would need to operate on a portfolio level to ask the user what org they are referring to. 
-    # The org selection needs to be stored somewhere for subsequent messages to be directed to the right org.
-    # At the beginning of the message processing, the agent will have to consult this memory to figure out what org the user is referring to. 
-    # entity_id if formed from three components: org (which we already inferred in the last step), tool (which we can acquire from the tree for this portfolio), section which is constant: 'wa'
-    # thread_id we can just use the most recent one. A new thread will be created automatically on the first message of the day. 
-    
-    
-    ## PSEUDOCODE
-    # 0. Obtain a list of orgs in this portfolio (Portfolio is the only variable we get from the Gupshup message)
-    # 1. Obtain a list of all threads in each Org.
-    # 2. Find the threads that match the sender id for that Org (which is the Whatsapp number, not the auth user id)
-    # 3. Select the last thread from the results. 
-    # 3b If no thread is found in that org for that user: <to be implemented>
-    # 4. Check if thread is from today. If yes Send payload to the AgentTriage with org_id and thread_id
-    # 4b. If the thread is not from today, create a new one. 
-    
-    entity_type = 'portfolio-tool-public'
-    entity_id = f'{portfolio}-{tool_id}-{msg_sender}'
-    # List threads will return success=true even if the list is empty (no threads)
-    threads = CHC.list_threads(entity_type,entity_id) 
-
-    '''
-    EXAMPLE , Threads
-    
-    {
-        "items": [
-            {
-                "_id": "8fcdd1f4-7eb8-4720-875e-3058b96867af",
-                "author_id": "9177697760",
-                "entity_id": "5038a960fde7-ca1a009b27d8-9177697760",
-                "entity_type": "portfolio-tool-public",
-                "index": "irn:chat:portfolio-tool-public/thread:5038a960fde7-ca1a009b27d8-9177697760",
-                "is_active": true,
-                "language": "ES",
-                "time": "1747404175.06456"
-            }
-        ],
-        "success": true
-    }
-    
-    '''
-    print(f'List Threads:{threads}')
-    
-    initialize_thread = False
-    if 'success' in threads: 
-        if len(threads['items'])<1:
-            # No threads found
-            # ACTION: Set flag to initialize a thread
-            print(f'Creating thread because:No threads have been found')
-            initialize_thread = True
+        if 'gs_app_id' not in payload:
+            return False, "Missing 'gs_app_id' field in payload"
+        
+        # Get the first entry
+        entry = payload['entry'][0]
+        if 'changes' not in entry or not entry['changes']:
+            return False, "Missing 'changes' field in entry"
+        
+        # Get the first change
+        change = entry['changes'][0]
+        if 'value' not in change:
+            return False, "Missing 'value' field in change"
+        
+        value = change['value']
+        
+        # Extract contacts and messages
+        if 'contacts' not in value or not value['contacts']:
+            return False, "Missing 'contacts' field in value"
+        
+        if 'messages' not in value or not value['messages']:
+            return False, "Missing 'messages' field in value"
+        
+        contact = value['contacts'][0]
+        message = value['messages'][0]
+        
+        # Extract required fields
+        try:
+            # 1. Message
+            message_text = message['text']['body']
             
-        # Pick the last thread
-        last_thread = threads['items'][0]
-        # For the thread to be valid. It needs to belong to the message sender number and be from today.
-        if last_thread['author_id'] == gupshup_payload['payload']['source']:
-            if datetime.fromtimestamp(float(last_thread['time'])).strftime('%Y-%m-%d') == datetime.fromtimestamp(float(msg_timestamp)/1000).strftime('%Y-%m-%d'):
-                # This user has sent another message today already
-                # Complete the input object and send message to triage . END
-                # ACTION: Capture the message_thread and forward the message to the triage
-                input = {
-                    'action':'gupshup_message',
-                    'portfolio':portfolio,
-                    'anonymous_user': gupshup_payload['payload']['source'],
-                    'entity_type':entity_type,
-                    'entity_id':entity_id,
-                    'thread':last_thread['_id'],
-                    'data': msg_content
-                }
-                
-                # config_location = <org_id> | '_all'
-                # get_location = [<org_id_1>,<org_id_2>,<org_id_3>]
-                # post_location = 
-                    
-                response_1 = AGC.triage(input,core_name='portfolio_public')
-                result.append(response_1)
+            # 2. Timestamp
+            timestamp = message['timestamp']
+            
+            # 3. Sender Name
+            sender_name = contact['profile']['name']
+            
+            # 4. Sender ID
+            sender_id = contact['wa_id']
+            
+            # 5. App ID
+            app_id = payload['gs_app_id']
+            
+        except KeyError as e:
+            return False, f"Missing required field: {e}"
+        
+        # Return extracted data
+        extracted_data = {
+            'message': message_text,
+            'timestamp': timestamp,
+            'sender_name': sender_name,
+            'sender_id': sender_id,
+            'app_id': app_id
+        }
+        
+        return True, extracted_data
+        
+    except Exception as e:
+        return False, f"Error extracting data: {str(e)}"
 
-            else:
-                # This user has sent messages before but not today
+
+
+def process_gupshup_message(portfolio, tool_id, payload):
+    """
+    Process a Gupshup message.
+
+    """
+    
+    try:
+    
+        result = []
+        
+        valid, data = extract_gupshup_payload(payload)
+        if not valid:
+            current_app.logger.error(f'Invalid gupshup payload')
+            return result
+        
+        msg_content = data['message']
+        msg_timestamp = data['timestamp']
+        msg_sender = data['sender_id'].strip()  # Remove whitespace and newlines
+
+        
+        entity_type = 'portfolio-tool-public'
+        entity_id = f'{portfolio}-{tool_id}-{msg_sender}'
+        # List threads will return success=true even if the list is empty (no threads)
+        threads = CHC.list_threads(entity_type, entity_id) 
+
+        print(f'List Threads:{threads}')
+        
+        initialize_thread = False
+        if 'success' in threads: 
+            if len(threads['items'])<1:
+                # No threads found
                 # ACTION: Set flag to initialize a thread
-                print(f'Creating thread because:This user has sent messages before but not today')
+                print(f'Creating thread because: No threads have been found (List was empty)')
                 initialize_thread = True
+                
+            else:       
+                # At least one thread exists. Pick the last thread
+                last_thread = threads['items'][0]
+                # For the thread to be valid. It needs to belong to the message sender number and be from today. (CONDITION DEPRECATED)
+                #if last_thread['author_id'] == msg_sender:
+                if datetime.fromtimestamp(float(last_thread['time'])).strftime('%Y-%m-%d') == datetime.fromtimestamp(float(msg_timestamp)).strftime('%Y-%m-%d'):
+                    # This user has sent another message today already
+                    # Complete the input object and send message to triage . END
+                    # ACTION: Capture the message_thread and forward the message to the triage
+                    print(f'Writing on existing thread:{last_thread}')
+                    
+                    input = {
+                        'action':'gupshup_message',
+                        'portfolio':portfolio,
+                        'public_user': msg_sender,
+                        'entity_type':entity_type,
+                        'entity_id':entity_id,
+                        'thread':last_thread['_id'],
+                        'data': msg_content
+                    }
+                    
+                    # config_location = <org_id> | '_all'
+                    # get_location = [<org_id_1>,<org_id_2>,<org_id_3>]
+                    # post_location = 
+                        
+                    response_1 = AGC.triage(input,core_name='portfolio_public')
+                    result.append(response_1)
+                    return result
+
+                else:
+                    # This user has sent messages before but not today
+                    # ACTION: Set flag to initialize a thread
+                    print(f'Creating thread because:Last thread is not from today')
+                    initialize_thread = True
+                        
+                
         else:
             # This user has not sent a message before
             # ACTION: Set flag to initialize a thread
-            print(f'Creating thread because:This user has not sent a message before')
+            print(f'Creating thread because: no threads found')
             initialize_thread = True
-              
-    if initialize_thread:
         
+        
+                    
+        if initialize_thread:
+            print(f'Calling : create_thread ')
+            response_2 = CHC.create_thread(entity_type,entity_id,public_user = msg_sender)
+            result.append(response_2)
+            if not response_2['success']:
+                current_app.logger.error(f'Failed to create thread: {response_2}')
+                return result
+                
+            new_thread_id = response_2['document']['_id'] 
+            input = {
+                'action':'gupshup_message', # We don't need this
+                'portfolio':portfolio,
+                'public_user': msg_sender,
+                'entity_type':entity_type,
+                'entity_id':entity_id,
+                'thread':new_thread_id,
+                'data': msg_content
+            }
+                
+            response_3 = AGC.triage(input,core_name='portfolio_public')
+            result.append(response_3)
+            
+        return result
+            
+    except Exception as e:
+        current_app.logger.error(f"Error processing gupshup message: {e}")
+        return result
 
-        print(f'Calling : create_thread ')
-        response_2 = CHC.create_thread(entity_type,entity_id,public_user = gupshup_payload['payload']['source'])
-        if not response_2['success']:
-            return False
-            
-        new_thread_id = response_2['document']['_id'] 
-        input = {
-            'action':'gupshup_message', # We don't need this
-            'portfolio':portfolio,
-            'public_user': gupshup_payload['payload']['source'],
-            'entity_type':entity_type,
-            'entity_id':entity_id,
-            'thread':new_thread_id,
-            'data': msg_content
-        }
-            
-        response_1 = AGC.triage(input,core_name='portfolio_public')
-        result.append(response_1)
-        
+
+
+
+# This is the function the WebHook receiving function
+@app_chat.route('/gs_in/<string:portfolio>/<string:tool_id>', methods=['POST'])
+def gupshup_in(portfolio,tool_id):
     
-    current_app.logger.debug('TRACE >>')
-    current_app.logger.debug(result)
+    # Get the payload first
+    gupshup_payload = request.get_json()
+    
+    current_app.logger.info(f"Load G:{gupshup_payload}")
+    
+    tool_id = 'ca1a009b27d8' # This is a patch. You need to correct the Gubshup URL 
+    
+    # Send to EventBridge for async processing
+    
+    try:
+        import boto3
+        import json
         
-    return result
+        events = boto3.client('events')
+        events.put_events(
+            Entries=[
+                {
+                    'Source': 'custom.gupshup.webhook',
+                    'DetailType': 'GupshupMessage',
+                    'Detail': json.dumps({
+                        'portfolio': portfolio,
+                        'tool_id': tool_id,
+                        'gupshup_payload': gupshup_payload
+                    }),
+                    'EventBusName': 'default'
+                }
+            ]
+        )
+        current_app.logger.info(f"Event sent to EventBridge for portfolio: {portfolio}, tool: {tool_id}, payload:{gupshup_payload}")
+        
+    except Exception as e:
+        current_app.logger.error(f"Failed to send event to EventBridge: {e}")
+        # Still return success to avoid webhook retries
+    
+    
+    # Return acknowledgment immediately
+    return "", 200
+
+@app_chat.route('/gs_in/<string:portfolio>/<string:tool_id>/', methods=['POST'])
+@cognito_auth_required
+def gupshup_in_with_slash(portfolio, tool_id):
+    # Call the same function to avoid code duplication
+    return gupshup_in(portfolio, tool_id)
+
+
+
+#https://apidev.woppi.ai/_chat/gs_in/5038a960fde7/ca1a009b27d8
+
+
+
+@app_chat.route('/process-gupshup/', methods=['POST'])
+def process_gupshup_event_with_slash():
+    # Call the same function to avoid code duplication
+    return process_gupshup_event()
+
+
+# EventBridge processor endpoint
+@app_chat.route('/process-gupshup', methods=['POST'])
+def process_gupshup_event():
+    """
+    Process Gupshup messages sent via EventBridge.
+    This endpoint is called by EventBridge when a webhook event is received.
+    """
+    current_app.logger.info("Processing EventBridge Gupshup event")
+    
+    try:
+        # Extract and validate event data
+        event_data = request.get_json()
+        current_app.logger.info(f"Received EventBridge event: {event_data}")
+        
+        
+        detail = event_data.get('detail', '{}')
+        portfolio = detail.get('portfolio')
+        tool_id = detail.get('tool_id')
+        gupshup_payload = detail.get('gupshup_payload')
+        
+        if not all([portfolio, tool_id, gupshup_payload]):
+            current_app.logger.error("Missing required fields in EventBridge event")
+            return "", 400
+        
+        # Process the message
+        response = process_gupshup_message(portfolio, tool_id, gupshup_payload)
+        
+        current_app.logger.info(f"Gupshup Trace >> {response}")
+        
+        return response, 200
+            
+    except Exception as e:
+        current_app.logger.error(f"Error processing Gupshup message: {e}")
+        return "", 500
+
 
 
 
