@@ -59,28 +59,23 @@ class AgentCore:
     def __init__(self):
         
         #OpenAI Client
-        #if True:
-        try:   
-            
+        try:    
             openai_client = OpenAI(api_key=OPENAI_API_KEY,)
             print(f"OpenAI client initialized")
-            #print(OPENAI_API_KEY)
-        #else:
         except Exception as e:
             print(f"Error initializing OpenAI client: {e}")
-            #print(OPENAI_API_KEY)
             openai_client = None
-            
-        self.DAC = DataController()
-        self.DCC = DocsController()
-        self.CHC = ChatController()
-        self.SHC = SchdController()
-        
-        
+
         self.AI_1 = openai_client
         #self.AI_1_MODEL = "gpt-4" // This model does not support json_object response format
         self.AI_1_MODEL = "gpt-3.5-turbo" # Baseline model. Good for multi-step chats
         self.AI_2_MODEL = "gpt-4o-mini" # This model is not very smart
+        
+        
+        self.DAC = DataController()
+        self.DCC = DocsController()
+        self.CHC = ChatController()
+        self.SHC = SchdController()
         
         try:
         
@@ -239,7 +234,7 @@ class AgentCore:
             # Memorize to permanent storage
             self.update_chat_message_document(doc,output['tool_call_id'])
                 
-            if 'display_directly' in output:  
+            if 'display_directly' in output['content']:  
                 self.print_chat(output,message_type)
                            
 
@@ -755,6 +750,39 @@ class AgentCore:
             return {key: self._convert_to_dict(value) for key, value in obj.items()}
         else:
             return obj
+        
+        
+    def remove_outer_escape(self, double_escaped_string):
+        """
+        Removes the outer escape from a double-escaped JSON string.
+        
+        Args:
+            double_escaped_string (str): A string that has been escaped twice
+            
+        Returns:
+            str: The cleaned JSON string, or None if parsing fails
+            
+        Example:
+            Input: '"{\\"raw_document\\":\\"Wood Property\\\\n1/25 Wellington Street...\\"}"'
+            Output: '{"raw_document": "Wood Property\n1/25 Wellington Street..."}'
+        """
+        try:
+            # First, parse the outer JSON string to get the inner escaped string
+            outer_parsed = json.loads(double_escaped_string)
+            
+            # Then parse the inner string to get the actual JSON object
+            if isinstance(outer_parsed, str):
+                inner_parsed = json.loads(outer_parsed)
+                # Return the cleaned JSON as a string
+                return json.dumps(inner_parsed)
+            else:
+                # If it's already a dict, convert back to string
+                return json.dumps(outer_parsed)
+                
+        except json.JSONDecodeError as e:
+            print(f"Error parsing double-escaped JSON: {e}")
+            return None
+        
 
     def validate_interpret_openai_llm_response(self, raw_response: dict) -> tuple[bool, str]:
         """
@@ -817,7 +845,17 @@ class AgentCore:
                     if isinstance(tool_call['function']['arguments'], str):
                         json.loads(tool_call['function']['arguments'])
                 except json.JSONDecodeError:
-                    return {"success":False,"action":action,"input":response,"output": "Tool call arguments must be a valid JSON string"}
+                    # Try to fix double-escaped JSON
+                    escape_result = self.remove_outer_escape(tool_call['function']['arguments'])
+                    if escape_result:
+                        # Validate the cleaned result
+                        try:
+                            json.loads(escape_result)
+                            tool_call['function']['arguments'] = escape_result
+                        except json.JSONDecodeError:
+                            return {"success":False,"action":action,"input":response,"output": "Tool call arguments must be a valid JSON string after cleaning"}
+                    else:
+                        return {"success":False,"action":action,"input":response,"output": "Tool call arguments must be a valid JSON string"}
                     
         # If it's a content response, validate content is a string
         if has_content and not isinstance(response['content'], str):
@@ -1050,9 +1088,11 @@ class AgentCore:
         
         action = 'interpret'
         self.print_chat('Interpreting message...', 'text')
+        print('interpret')
         
         try:
             message_list = self._get_context().message_history
+            
             
             # Get current time and date
             current_time = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
@@ -1067,13 +1107,14 @@ class AgentCore:
             action_instructions = '' 
             action_tools = []
             list_actions = self._get_context().list_actions
+            
             for a in list_actions:
                 if a['key'] == current_action:
                     action_instructions = a['prompt_3_reasoning_and_planning']
                     if 'tools_reference' in a and a['tools_reference'] and a['tools_reference'] not in ['_','-','.']: 
                         action_tools = a['tools_reference']
                     break
-                            
+
             # Belief  
             current_beliefs = workspace.get('state', {}).get('beliefs', {}) if workspace else {}
             belief_str = 'Current beliefs: ' + self.string_from_object(current_beliefs)
@@ -1134,30 +1175,50 @@ class AgentCore:
               
             list_tools_raw = self._get_context().list_tools
             
-            #print(f'List Tools:{list_tools_raw}')
+            print(f'List Tools:{list_tools_raw}')
             
             list_tools = [] 
             for t in list_tools_raw:
                 # Parse the escaped JSON string into a Python object
                 try:
-                    tool_input = json.loads(t.get('input', '{}'))
+                    tool_input = json.loads(t.get('input', '[]'))
                 except json.JSONDecodeError:
-                    print(f"Warning: Invalid JSON in tool input for tool {t.get('key', 'unknown')}. Using empty object.")
-                    tool_input = {}
+                    print(f"Warning: Invalid JSON in tool input for tool {t.get('key', 'unknown')}. Using empty array.")
+                    tool_input = []
                 
                 dict_params = {}
-                for key, val in tool_input.items():
-                    dict_params[key] = {'type':'string','description':val}
+                required_params = []
+                
+                # Handle new format: array of objects with name, hint, required
+                if isinstance(tool_input, list):
+                    for param in tool_input:
+                        if isinstance(param, dict) and 'name' in param and 'hint' in param:
+                            param_name = param['name']
+                            param_hint = param['hint']
+                            param_required = param.get('required', False)
+                            
+                            dict_params[param_name] = {
+                                'type': 'string',
+                                'description': param_hint
+                            }
+                            
+                            if param_required:
+                                required_params.append(param_name)
+                # Handle old format for backward compatibility
+                elif isinstance(tool_input, dict):
+                    for key, val in tool_input.items():
+                        dict_params[key] = {'type': 'string', 'description': val}
+                        required_params.append(key)
                     
                 tool = {
-                    'type':'function',
-                    'function':{
-                        'name':t.get('key', ''),
-                        'description':t.get('goal', ''),
-                        'parameters':{
-                            'type':'object',
-                            'properties':dict_params,
-                            'required': list(tool_input.keys())
+                    'type': 'function',
+                    'function': {
+                        'name': t.get('key', ''),
+                        'description': t.get('goal', ''),
+                        'parameters': {
+                            'type': 'object',
+                            'properties': dict_params,
+                            'required': required_params
                         }
                     }    
                 }
@@ -1188,7 +1249,7 @@ class AgentCore:
                     'output': validation
                 }
             
-            validated_result = validation['output']                  
+            validated_result = validation['output']
            
             # Saving : A) The tool call, or B) The message to the user
             self.save_chat(validated_result)  
@@ -1215,24 +1276,6 @@ class AgentCore:
     def act(self,plan):
         action = 'act'
         
-        
-        # Plan is the output from the LLM to execute a tool
-        '''
-        plan = 
-        {
-            "role": "assistant",
-            "tool_calls": [
-                {
-                "id": "call_001",
-                "type": "function",
-                "function": {
-                    "name": "searchFlights",
-                    "arguments": "{ \"origin\": \"NYC\", \"destination\": \"SF\", \"departure_date\": \"2025-06-20\" }"
-                }
-                }
-            ]
-        }
-        '''
         
         list_tools_raw = self._get_context().list_tools
         
@@ -1305,9 +1348,9 @@ class AgentCore:
             if not response['success']:
                 return {'success':False,'action':action,'input':params,'output':response}
 
-            clean_output = response['output']['output']['output'][0]['output']
+            clean_output = response['output']['output']['output'][-1]['output']
             clean_output_str = json.dumps(clean_output)
-            
+        
             
             print(f'flag1')
             
@@ -1317,6 +1360,9 @@ class AgentCore:
                     "content": clean_output_str,
                     "tool_calls":False
                 }
+            
+            if 'display_directly' in clean_output:
+                tool_out['display_directly'] = True
             
             print(f'flag2')
             
@@ -1338,9 +1384,11 @@ class AgentCore:
             # If the value of each key is not a string just output an empty space in its place
             #params_str = self.format_object_to_slash_string(params)
             index = f'irn:tool_rs:{handler_route}' 
-            input = plan['tool_calls'][0]['function']['arguments']        
-            value = {'input': input, 'output': clean_output}       
-            self.mutate_workspace({'cache': {index: value}})
+            tool_input = plan['tool_calls'][0]['function']['arguments'] 
+            #input is a serialize json, you need to turn it into a python object before inserting it into the value dictionary
+            tool_input_obj = json.loads(input) if isinstance(input, str) else tool_input
+            value = {'input': tool_input_obj, 'output': clean_output}
+            self.mutate_workspace({'cache': {index:value}})
             
             print(f'flag5')
             
@@ -1501,41 +1549,61 @@ class AgentCore:
             if not response_0b['success']: 
                 return {'success':False,'action':action,'output':results}
             
-            # Step 1: Interpret. We receive the message from the user and we issue a tool command or another message       
-            response_1 = self.interpret()
-            results.append(response_1)
-            if not response_1['success']:
-                # Something went wrong during message interpretation
-                return {'success':False,'action':action,'output':results}         
-            # Check whether we need to run a tool
-            if 'tool_calls' not in response_1['output'] or not response_1['output']['tool_calls']:
-                # No tool needs execution. 
-                # Most likely the agent is asking for more information to fill tool parameters. 
-                # Or agent is answering questions directly from the belief system.
-                self.print_chat(f'🤖','text')
-                return {'success':True,'action':action,'input':payload,'output':results}
-                            
-            else:
-                # Step 2: Act. Agent runs the tool
-                response_2 = self.act(response_1['output'])
-                results.append(response_2)
-                if not response_2['success']:
-                    # Something went wrong during tool execution
-                    return {'success':False,'action':action,'output':results}
-                # Check if the tool wants to show results directly        
-                if 'display_directly' in response_2['output']:
-                    # Return the raw results of the tool skipping reflection.
-                    return {'success':True,'action':action,'output':results}                      
-                else: 
+            loops = 0
+            loop_limit = 3
+            while loops < loop_limit:
+                loops = loops + 1
+                print(f'Loop iteration {loops}/{loop_limit}')
+                
+                # Step 1: Interpret. We receive the message from the user and we issue a tool command or another message       
+                response_1 = self.interpret()
+                results.append(response_1)
+                if not response_1['success']:
+                    # Something went wrong during message interpretation
+                    return {'success':False,'action':action,'output':results}         
+                
+                # Check whether we need to run a tool
+                if 'tool_calls' not in response_1['output'] or not response_1['output']['tool_calls']:
+                    # No tool needs execution. 
+                    # Most likely the agent is asking for more information to fill tool parameters. 
+                    # Or agent is answering questions directly from the belief system.
+                    self.print_chat(f'🤖','text')
+                    return {'success':True,'action':action,'input':payload,'output':results}
+                                
+                else:
+                    # Step 2: Act. Agent runs the tool
+                    response_2 = self.act(response_1['output'])
+                    results.append(response_2)
+                    if not response_2['success']:
+                        # Something went wrong during tool execution
+                        return {'success':False,'action':action,'output':results}
+                    
+                    # Check if the tool wants to show results directly        
+                    if 'display_directly' in response_2['output']:
+                        # Return the raw results of the tool skipping reflection.
+                        return {'success':True,'action':action,'output':results} 
+                    
                     # Step 3: Reflect. LLM sees the result and crafts human output
                     response_3 = self.interpret()
                     results.append(response_3)
                     if not response_3['success']:
                         return {'success':False,'action':action,'output':results}
-                    # Return results of reflection. THIS IS THE MOST COMMON PATH
-                    self.print_chat(f'🤖','text')
-                    return {'success':True,'action':action,'input':payload,'output':results}
-                
+                    
+                    # Check if the reflection resulted in more tool calls
+                    if 'tool_calls' in response_3['output'] and response_3['output']['tool_calls']:
+                        # Continue the loop for the next tool call
+                        print(f'Continuing loop for additional tool calls...')
+                        continue
+                    else:
+                        # No more tool calls, we're done
+                        self.print_chat(f'🤖','text')
+                        return {'success':True,'action':action,'input':payload,'output':results}
+            
+            # If we reach here, we hit the loop limit
+            print(f'Warning: Reached maximum loop limit ({loop_limit})')
+            self.print_chat(f'🤖⚠️ (Max iterations reached)','text')
+            return {'success':True,'action':action,'input':payload,'output':results}
+                    
 
 
 

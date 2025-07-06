@@ -87,18 +87,30 @@ source venv/bin/activate
 ```
 
 Install all packages indicated in requirements.txt
-
 ```
 pip install -r requirements.txt
 ```
 
 Set the new configuration file
-
 ```
 cp env_config.py.TEMPLATE env_config.py
 ```
 
-Enter the tokens, secrets and IDs that belong to the environment you are deploying to. 
+Set the run script
+```
+cp run.sh.TEMPLATE run.sh
+vim run.sh
+```
+Specify the project namespace and the region in run.sh
+```
+#!/bin/bash
+export AWS_PROFILE=<PROJECT>
+export AWS_DEFAULT_REGION=<REGION>
+flask run
+```
+
+
+Open the config files and esourcenter the tokens, secrets and IDs that belong to the environment you are deploying to. 
 Many of those settings will be available to you until you set the cloud (Step 10). 
 
 
@@ -215,6 +227,14 @@ If you are still getting errors, update the nvm version
 nvm install 18
 ```
 
+Set the Tools manifest. Copy the contents of the tools template
+
+```
+cd tower/src
+cp tools.json.TEMPLATE tools.json
+```
+
+
 Then try running the dev server again
 
 ```
@@ -248,16 +268,6 @@ cd tools/public
 The image names are listed in the .gitignore and in the .env.* files. For that reason you must use those names. 
 
 
-Set the Tools manifest
-
-Copy the contents of the tools template
-
-```
-cd tower/src
-cp tools.json.TEMPLATE tools.json
-```
-
-
 
 Build the FrontEnd
 Tank interacts with the Tower build not with its raw components. 
@@ -287,6 +297,7 @@ You need to install the libraries used by the tools in the /tools folder.
 cd ../tools
 npm install recharts
 npm install lucide-react
+npm install react-resizable-panels
 ```
 
 This will automatically create the `node_modules` folder and the files `package-lock.json`, `package.json` and `tscongif.json`

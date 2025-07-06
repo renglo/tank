@@ -273,6 +273,10 @@ TROUBLESHOOT:
 -If you find a blank screen, double check your tank and tower configuration files have the domain you just configured. 
 - If you are using Chrome, it won't work immediately even if you close the window, refresh everything. Try in another browser. Eventually, Chrome will consult the new DNS records and show you the page. 
 
+
+
+
+
 ### Step 7: Setting up the WebSocket API
 
 Manual Process
@@ -286,6 +290,7 @@ Route selection expression: $request.body.action
 IP address type: IPv4
 
 Step 2 > Routes
+Select Add Custom Route
 Route key:  chat_message
 
 Step 3 > Integrations
@@ -326,10 +331,13 @@ Name: message_template
 }
 ```
 
-Enable two-way communication in the HTTP integration
+Add the name of the template ("message_template") to the Template selection expression
+
+IMPORTANT: Every time you make a change in the templates or routes, you need to click on "Deploy API" otherwise the changes won't reflect.
 
 
-Automatic Process
+-----------------
+Steps 1-4 could have been automatically done by running this command
 
 Go to /tank/installer and run
 
@@ -340,13 +348,26 @@ python create_websocket_api.py <api_name> "<integration_target>" "<endpoint>" <e
 Example_Usage:
 python create_websocket_api.py x_prod_1234a_websocket "chat_message" "https://qwerty123.execute-api.us-east-1.amazonaws.com/x_prod_1234a/_chat/message" prod --aws-profile volatour
 
-Check that the Two Way communication is DISABLED
 
 Go to the Stages section in the new WebSocket API (just created) and looks for:
 
 WebSocket URL and @connections URL . Copy them somewhere
+------------------
+
+
+Step 5 > Let the FrontEnd and BackEnd where to connect to the WebSocket
+
+Go to the Stages section on the left menu, 
+Select the environment you just created (dev|prod)
+
+Look for the Connections URL. 
+It looks like this: https://abc123.execute-api.us-east-1.amazonaws.com/dev/@connections
 
 Open tank/env_config.py and paste the @connections URL in the constant called WEBSOCKET_CONNECTIONS without the "/@connections" part at the end. 
+
+
+Look for the WebSocket URL
+It looks like this: wss://abc123.execute-api.us-east-1.amazonaws.com/dev/
 
 Open tower/.env.production and tower/.env.development and paste the WebSocket URL as is
 
