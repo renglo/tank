@@ -17,6 +17,7 @@ from decimal import Decimal
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 import time
+import uuid
 
 from env_config import OPENAI_API_KEY,WEBSOCKET_CONNECTIONS
 
@@ -121,7 +122,7 @@ class AgentCore:
             print(f'entity_id :{self._get_context().entity_id}')
             print(f'thread :{self._get_context().thread}')
         
-            response = self.CHC.list_messages(
+            response = self.CHC.list_turns(
                             self._get_context().entity_type,
                             self._get_context().entity_id,
                             self._get_context().thread
@@ -135,8 +136,8 @@ class AgentCore:
             # Prepare messages to look like an OpenAI message array
             # Also remove messages that don't belong to an approved type
             message_list = []
-            for message in response['items']: 
-                for m in message['messages']:
+            for turn in response['items']: 
+                for m in turn['messages']:
                     out_message = m['_out']
                     if m['_type'] in ['user','system','text','tool_rq','tool_rs']: #OK to show to LLM
                         message_list.append(out_message)      
@@ -158,7 +159,7 @@ class AgentCore:
         
         try:
         
-            response = self.CHC.update_message(
+            response = self.CHC.update_turn(
                             self._get_context().entity_type,
                             self._get_context().entity_id,
                             self._get_context().thread,
@@ -482,7 +483,11 @@ class AgentCore:
         message_context['thread'] = self._get_context().thread
           
         new_message = { "role": "user", "content": message }
-        msg_wrap = {"_out":new_message,"_type":"text"}
+        msg_wrap = {
+            "_out":new_message,
+            "_type":"text",
+            "_id":str(uuid.uuid4()) # This is the Message ID
+        }
         
         # Append new message to volatile context
         current_history = self._get_context().message_history
@@ -497,7 +502,7 @@ class AgentCore:
         #message_object['output'] = [msg_wrap]
         message_object['messages'] = [msg_wrap]
                  
-        response = self.CHC.create_message(
+        response = self.CHC.create_turn(
                         self._get_context().entity_type,
                         self._get_context().entity_id,
                         self._get_context().thread,

@@ -73,11 +73,13 @@ class ChatController:
     
     
     
-    # MESSAGES
+    # TURNS
+    # There is a document per turn in the database
+    # Every turn document contains a list of messages that belong to that turn
     
-    def list_messages(self,entity_type,entity_id,thread_id):
+    def list_turns(self,entity_type,entity_id,thread_id):
               
-        index = f"irn:chat:{entity_type}/thread/message:{entity_id}/{thread_id}"
+        index = f"irn:chat:{entity_type}/thread/turn:{entity_id}/{thread_id}"
         limit = 50
         sort = 'asc'
         
@@ -86,23 +88,23 @@ class ChatController:
         return response
     
     
-    def get_message(self, entity_type, entity_id, thread_id, message_id):
+    def get_turn(self, entity_type, entity_id, thread_id, turn_id):
         
-        index = f"irn:chat:{entity_type}/thread/message:{entity_id}/{thread_id}" 
-        print(f'get_message > {index} > {message_id}') 
-        response = self.CHM.get_chat(index,message_id) 
+        index = f"irn:chat:{entity_type}/thread/turn:{entity_id}/{thread_id}" 
+        print(f'get_turn > {index} > {turn_id}') 
+        response = self.CHM.get_chat(index,turn_id) 
         return response
     
     
-    def create_message(self, entity_type, entity_id, thread_id, payload):
-        print('CHC:create_message')
+    def create_turn(self, entity_type, entity_id, thread_id, payload):
+        print('CHC:create_turn')
         try:
             if not all([entity_type, entity_id, thread_id, payload]):
                 raise ValueError("Missing required parameters")
 
-            index = f"irn:chat:{entity_type}/thread/message:{entity_id}/{thread_id}"
+            index = f"irn:chat:{entity_type}/thread/turn:{entity_id}/{thread_id}"
             
-            current_app.logger.debug(f'create_message > input > {index}')
+            current_app.logger.debug(f'create_turn > input > {index}')
             current_app.logger.debug(f'payload: {payload}')
             
             # Validate required payload fields
@@ -129,7 +131,7 @@ class ChatController:
                 'context': payload['context'],
                 'messages': messages,
                 'index': index,
-                '_id': str(uuid.uuid4())
+                '_id': str(uuid.uuid4()) # This is the turn ID 
             }
             
             current_app.logger.debug(f'Prepared data for chat creation: {data}')
@@ -138,10 +140,10 @@ class ChatController:
             return response
             
         except Exception as e:
-            current_app.logger.error(f"Error in create_message: {str(e)}")
+            current_app.logger.error(f"Error in create_turn: {str(e)}")
             return {
                 "success": False,
-                "message": f"Error creating message: {str(e)}",
+                "message": f"Error creating turn: {str(e)}",
                 "status": 500
             }
         
@@ -158,10 +160,10 @@ class ChatController:
             return str(obj)
         return obj
 
-    def update_message_x(self,entity_type, entity_id, thread_id, message_id, update):
-        print(f'CHC:update_message {entity_type}/{thread_id}/{message_id}:{update}')
+    def update_turn_x(self,entity_type, entity_id, thread_id, turn_id, update):
+        print(f'CHC:update_turn {entity_type}/{thread_id}/{turn_id}:{update}')
         try:
-            data = self.get_message(entity_type, entity_id, thread_id, message_id)
+            data = self.get_turn(entity_type, entity_id, thread_id, turn_id)
             
             if not data['success']:
                 return data
@@ -182,7 +184,7 @@ class ChatController:
             return response
         
         except Exception as e:
-            current_app.logger.error(f"Error in update_message: {str(e)}")
+            current_app.logger.error(f"Error in update_turn: {str(e)}")
             return {
                 "success": False,
                 "message": f"Error updating message: {str(e)}",
@@ -190,10 +192,10 @@ class ChatController:
             }
             
     
-    def update_message(self,entity_type, entity_id, thread_id, message_id, update, call_id=False):
-        print(f'CHC:update_message {entity_type}/{thread_id}/{message_id}:{update}')
+    def update_turn(self,entity_type, entity_id, thread_id, turn_id, update, call_id=False):
+        print(f'CHC:update_turn {entity_type}/{thread_id}/{turn_id}:{update}')
         try:
-            data = self.get_message(entity_type, entity_id, thread_id, message_id)
+            data = self.get_turn(entity_type, entity_id, thread_id, turn_id)
             
             if not data['success']:
                 return data
@@ -221,7 +223,7 @@ class ChatController:
             return response
         
         except Exception as e:
-            current_app.logger.error(f"Error in update_message: {str(e)}")
+            current_app.logger.error(f"Error in update_turn: {str(e)}")
             return {
                 "success": False,
                 "message": f"Error updating message: {str(e)}",

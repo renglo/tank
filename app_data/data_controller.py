@@ -830,6 +830,7 @@ class DataController:
             result['success'] = True
             result['message'] = 'Item saved (POST)'
             result['path'] = str(portfolio+'/'+org+'/'+ring+'/'+item['_id'])
+            result['item'] = item
             status = 200
 
         else:

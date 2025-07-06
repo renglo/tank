@@ -172,7 +172,7 @@ def chat_messages(entity_type,entity_id,thread_id):
     
     
     if request.method == 'GET':
-        response = CHC.list_messages(entity_type,entity_id,thread_id)  
+        response = CHC.list_turns(entity_type,entity_id,thread_id)  
 
         
     return response
