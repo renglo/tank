@@ -5,6 +5,7 @@ from flask_cognito import current_cognito_jwt
 from datetime import datetime
 from common import *
 import uuid
+import json
 
 
 
@@ -193,7 +194,7 @@ class ChatController:
             
     
     def update_turn(self,entity_type, entity_id, thread_id, turn_id, update, call_id=False):
-        print(f'CHC:update_turn {entity_type}/{thread_id}/{turn_id}:{update}')
+        print(f'CHC:update_turn {entity_type}/{thread_id}/{turn_id}:{update}::{call_id}')
         try:
             data = self.get_turn(entity_type, entity_id, thread_id, turn_id)
             
@@ -207,10 +208,44 @@ class ChatController:
                 item['messages'] = []
             
             
-            if call_id:   
+            if call_id: 
+                print('Call id found:')  
+                print(item['messages'])
                 for i in item['messages']:
                     if 'tool_call_id' in i['_out'] and i['_out']['tool_call_id'] == call_id:
-                        i = update # update has the shape {'_out':... , '_type':...} You are replacing the entire object
+                        print(f'Found the message with matching id:{i}')
+                        print(f'Replacing with new doc:{update}') 
+                        # Find the index of the item in the list
+                        index = item['messages'].index(i)
+                        # Parse JSON string to Python object and replace content
+                        try:
+                            parsed_content = json.loads(update['_out']['content'])
+                            
+                            # Validate and normalize the parsed content
+                            if isinstance(parsed_content, dict):
+                                # If it's a single object, wrap it in a list
+                                parsed_content = [parsed_content]
+                            elif isinstance(parsed_content, list):
+                                # If it's a list, validate that all items are dictionaries
+                                if not all(isinstance(item, dict) for item in parsed_content):
+                                    # If any item is not a dict, use original content
+                                    parsed_content = update['_out']['content']
+                            else:
+                                # If it's neither dict nor list, use original content
+                                parsed_content = update['_out']['content']
+                                
+                            item['messages'][index]['_out']['content'] = parsed_content
+                            
+                            if '_interface' in update:
+                                item['messages'][index]['_interface'] = update['_interface']
+                                
+                            print(item['messages'][index])
+                            
+                            
+                        except json.JSONDecodeError as e:
+                            print(f"Error parsing JSON content: {e}")
+                            # If JSON parsing fails, keep the original string
+                            item['messages'][index]['_out']['content'] = update['content']
             else:
                     
                 # Convert any float values in the update to strings
@@ -218,6 +253,7 @@ class ChatController:
                 item['messages'].append(update)
             
             #current_app.logger.debug(f'Prepared data for chat update: {item}')
+            print(f'Store modified item:{item}')
             response = self.CHM.update_chat(item)
             print(response) 
             return response

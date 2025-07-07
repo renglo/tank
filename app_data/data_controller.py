@@ -817,31 +817,42 @@ class DataController:
         Creates new item
         '''
 
-        item = self.construct_post_item(portfolio,org,ring,payload)
-        
-        current_app.logger.debug('Prepared Item:'+str(item))
+        try:
+            item = self.construct_post_item(portfolio,org,ring,payload)
+            
+            current_app.logger.debug('Prepared Item:'+str(item))
 
-        response = self.DAM.post_a_b(portfolio,org,ring,item)
+            response = self.DAM.post_a_b(portfolio,org,ring,item)
 
-        result = {}
-        status = 0
+            result = {}
+            status = 0
 
-        if 'error' not in response:                    
-            result['success'] = True
-            result['message'] = 'Item saved (POST)'
-            result['path'] = str(portfolio+'/'+org+'/'+ring+'/'+item['_id'])
-            result['item'] = item
-            status = 200
+            if 'error' not in response:                    
+                result['success'] = True
+                result['message'] = 'Item saved (POST)'
+                result['path'] = str(portfolio+'/'+org+'/'+ring+'/'+item['_id'])
+                result['item'] = item
+                status = 200
 
-        else:
-            result['success'] = False
-            result['message'] = 'Item could not be saved'
-            result['error'] = response['error']
-            status = 400
-        
-        current_app.logger.debug('Returned object:'+str(result))
-        
-        return result, status
+            else:
+                result['success'] = False
+                result['message'] = 'Item could not be saved'
+                result['error'] = response['error']
+                status = 400
+            
+            current_app.logger.debug('Returned object:'+str(result))
+            
+            return result, status
+            
+        except Exception as e:
+            current_app.logger.error(f'Error in post_a_b: {str(e)}')
+            result = {
+                'success': False,
+                'message': 'Item could not be saved due to an exception',
+                'error': str(e)
+            }
+            status = 500
+            return result, status
 
 
     
