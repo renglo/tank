@@ -298,6 +298,7 @@ cd ../tools
 npm install recharts
 npm install lucide-react
 npm install react-resizable-panels
+npm install date-fns
 ```
 
 This will automatically create the `node_modules` folder and the files `package-lock.json`, `package.json` and `tscongif.json`

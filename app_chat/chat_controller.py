@@ -161,36 +161,7 @@ class ChatController:
             return str(obj)
         return obj
 
-    def update_turn_x(self,entity_type, entity_id, thread_id, turn_id, update):
-        print(f'CHC:update_turn {entity_type}/{thread_id}/{turn_id}:{update}')
-        try:
-            data = self.get_turn(entity_type, entity_id, thread_id, turn_id)
-            
-            if not data['success']:
-                return data
-            
-            item = data['item']
-            #print(f'Document retrieved:{item}')
-            
-            if 'messages' not in item or not isinstance(item['messages'], list):
-                item['messages'] = []
-            
-            # Convert any float values in the update to strings
-            update = self._convert_floats_to_strings(update)
-            item['messages'].append(update)
-            
-            #current_app.logger.debug(f'Prepared data for chat update: {item}')
-            response = self.CHM.update_chat(item)
-            print(response) 
-            return response
-        
-        except Exception as e:
-            current_app.logger.error(f"Error in update_turn: {str(e)}")
-            return {
-                "success": False,
-                "message": f"Error updating message: {str(e)}",
-                "status": 500
-            }
+    
             
     
     def update_turn(self,entity_type, entity_id, thread_id, turn_id, update, call_id=False):
@@ -234,6 +205,7 @@ class ChatController:
                                 # If it's neither dict nor list, use original content
                                 parsed_content = update['_out']['content']
                                 
+                            parsed_content = self._convert_floats_to_strings(parsed_content)
                             item['messages'][index]['_out']['content'] = parsed_content
                             
                             if '_interface' in update:
@@ -245,7 +217,8 @@ class ChatController:
                         except json.JSONDecodeError as e:
                             print(f"Error parsing JSON content: {e}")
                             # If JSON parsing fails, keep the original string
-                            item['messages'][index]['_out']['content'] = update['content']
+                            parsed_content = self._convert_floats_to_strings(update['content'])
+                            item['messages'][index]['_out']['content'] = parsed_content
             else:
                     
                 # Convert any float values in the update to strings
