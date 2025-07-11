@@ -6,7 +6,9 @@ from datetime import datetime
 from common import *
 import uuid
 import json
+import boto3
 
+from env_config import WEBSOCKET_CONNECTIONS
 
 
 class ChatController:
@@ -14,6 +16,36 @@ class ChatController:
     def __init__(self,tid=None,ip=None):
 
         self.CHM = ChatModel(tid=tid,ip=ip)
+        
+        
+    def error_chat(self,error,connection_id):
+    
+        try:
+            self.apigw_client = boto3.client("apigatewaymanagementapi", endpoint_url=WEBSOCKET_CONNECTIONS)
+        
+        except Exception as e:
+            print(f"Error initializing WebSocket client: {e}")
+            self.apigw_client = None
+        
+     
+        try:
+            print(f'Sending Error Message to:{connection_id}')
+            
+            # WebSocket
+            self.apigw_client.post_to_connection(
+                ConnectionId=connection_id,
+                Data=error
+            )
+               
+            print(f'Error Message has been sent: {error}')
+            return True
+        
+        except self.apigw_client.exceptions.GoneException:
+            print(f'Connection is no longer available')
+            return False
+        except Exception as e:
+            print(f'Error sending message: {str(e)}')
+            return False
         
         
     def get_current_user(self):
