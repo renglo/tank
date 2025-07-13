@@ -256,20 +256,17 @@ class AgentCore:
             # Memorize to permanent storage
             self.update_chat_message_document(doc,output['tool_call_id'])
             self.update_chat_message_context(doc,reset=True)
-            
-                
-            if 'display_directly' in output['content']:  
-                self.print_chat(output,message_type)
+              
+            if interface:  
+                self.print_chat(doc,message_type,True)
                            
 
-        
-        
- 
-        
 
-    def print_chat(self,output,type='text'):
+    def print_chat(self,output,type='text',as_is=False):
         
-        if isinstance(output, dict) and 'role' in output and 'content' in output and output['role'] and output['content']: 
+        if as_is:
+            doc = output             
+        elif isinstance(output, dict) and 'role' in output and 'content' in output and output['role'] and output['content']: 
             # Content responses from LLM  
             doc = {'_out':{'role':output['role'],'content':self.sanitize(output['content'])},'_type':type}      
         elif isinstance(output, str):
@@ -887,6 +884,7 @@ class AgentCore:
             recent_tool_messages: Number of recent tool messages to keep with content (default: 1)
         """
         print(f'Raw message_list:{message_list}')
+        # {'success': True, 'action': 'get_message_history', 'input': '531fdfa8-9f60-4c8d-b046-6fa06d6f2a76', 'output': [{'content': "I'm looking for a hotel", 'role': 'user'}]}
         # Find the indices of the last x tool messages
         tool_indices = []
         for i in range(len(message_list) - 1, -1, -1):
@@ -1156,7 +1154,7 @@ class AgentCore:
             # The reason is that we don't want to overwhelm the LLM with the contents of the history of tool outputs. 
             
             # Clear content from all tool messages except the last one
-            message_list = self.clear_tool_message_content(message_list)
+            message_list = self.clear_tool_message_content(message_list['output'])
             
             
             # Get current time and date
