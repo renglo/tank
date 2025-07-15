@@ -293,7 +293,10 @@ class DataController:
                         item_values[field['name']] = new_raw
                     else:
                         item_values[field['name']] = json.loads(new_raw.strip())
-                except:
+                except Exception as e:
+                    print('CPI > Blueprint : Type : array > Load json > Except > Load String ')
+                    print(f'CPI > Blueprint : Type : array > Error details: {str(e)}')
+                    print(f'CPI > Blueprint : Type : array > Error type: {type(e).__name__}')
                     if new_raw == '':
                         item_values[field['name']] = []
                     else:
@@ -414,7 +417,8 @@ class DataController:
         #3. Convert incoming request payload to JSON
 
         
-        #current_app.logger.debug('Payload:'+str(payload))
+        #current_app.logger.debug('CPI Payload:'+str(payload))
+        #print(f"CPI TYPE:{type(payload).__name__}")
         #current_app.logger.debug(blueprint['fields']) 
 
         #4. Check that the payload follows the Blueprint
@@ -429,22 +433,42 @@ class DataController:
 
                
                 if field['type'] == 'object':
+                    #print('CPI > Blueprint : Type : object ')
                     
-                    try:
-                        updated_item['attributes'][field['name']] = json.loads(new_raw.strip())
+                    # Check if new_raw is already a dict
+                    if isinstance(new_raw, dict):
+                        #print('CPI > Blueprint : Type : object > Already dict, using as is')
+                        updated_item['attributes'][field['name']] = new_raw
                         putNeeded = True
-                    except:
-                        updated_item['attributes'][field['name']] = str(new_raw).strip()
-                        putNeeded = True
+                    else:
+                        try:
+                            #print('CPI > Blueprint : Type : object > Load json ')
+                            updated_item['attributes'][field['name']] = json.loads(new_raw.strip())
+                            putNeeded = True
+                        except:
+                            #print('CPI > Blueprint : Type : object > Load json > Except > Load String ')
+                            updated_item['attributes'][field['name']] = str(new_raw).strip()
+                            putNeeded = True
                 
                 elif field['type'] == 'array':
+                    #print('CPI > Blueprint : Type : array ')
                     
-                    try:
-                        updated_item['attributes'][field['name']] = json.loads(new_raw.strip())
+                    # Check if new_raw is already a list
+                    if isinstance(new_raw, list):
+                        #print('CPI > Blueprint : Type : array > Already list, using as is')
+                        updated_item['attributes'][field['name']] = new_raw
                         putNeeded = True
-                    except:
-                        updated_item['attributes'][field['name']] = str(new_raw).strip()
-                        putNeeded = True
+                    else:
+                        try:
+                            #print('CPI > Blueprint : Type : array > Load json ')
+                            updated_item['attributes'][field['name']] = json.loads(new_raw.strip())  
+                            putNeeded = True
+                        except Exception as e:
+                            print('CPI > Blueprint : Type : array > Load json > Except > Load String ')
+                            print(f'CPI > Blueprint : Type : array > Error details: {str(e)}')
+                            print(f'CPI > Blueprint : Type : array > Error type: {type(e).__name__}')
+                            updated_item['attributes'][field['name']] = str(new_raw).strip()
+                            putNeeded = True
                 
                 else:
                     
@@ -493,6 +517,8 @@ class DataController:
 
         #6. Return to save document to DB
         #updated_item['modified'] = datetime.now().isoformat()
+        #print('CPI > OUTPUT:')
+        #print(updated_item)
         
         updated_item = self.sanitize(updated_item)
 
@@ -917,6 +943,7 @@ class DataController:
 
         result = {}
 
+        #current_app.logger.debug('Icoming put object:'+str(payload))
         item = self.construct_put_item(portfolio,org,ring,idx,payload)
 
         if 'error' in item:
@@ -928,9 +955,11 @@ class DataController:
             return result
 
         
-        current_app.logger.debug('Updated Item:'+str(item))
+        current_app.logger.debug('Updating Item:'+str(item))
 
         response = self.DAM.put_a_b_c(portfolio,org,ring,idx,item)
+        
+        #current_app.logger.debug('Update response:'+str(response))
 
 
         if 'error' not in response:                    
@@ -938,7 +967,7 @@ class DataController:
             result['message'] = 'Item saved (PUT)'
             result['path'] = str(portfolio+'/'+org+'/'+ring+'/'+idx)
             status = 200
-            current_app.logger.debug('Returned object:'+str(result))
+            current_app.logger.debug('Returned object:'+str(result)) ## COMMENT OUT
 
             return result,status
 

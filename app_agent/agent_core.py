@@ -1448,6 +1448,13 @@ class AgentCore:
 
             portfolio = self._get_context().portfolio
             org = self._get_context().org
+            
+            params['_portfolio'] = self._get_context().portfolio
+            params['_org'] = self._get_context().org
+            params['_entity_type'] = self._get_context().entity_type
+            params['_entity_id'] = self._get_context().entity_id
+            params['_thread'] = self._get_context().thread
+            
   
             #self.print_chat(f'Calling {handler_route} ','text') 
             print(f'Calling {handler_route} ') 
