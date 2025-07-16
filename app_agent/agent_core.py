@@ -1213,6 +1213,9 @@ class AgentCore:
             for msg in message_list:      
                 messages.append(msg)       
                 
+            # Initialize approved_tools with default empty list
+            approved_tools = []
+                
             # Request asking the recommended tools for this action
             if action_tools and not no_tools:
                 messages.append({ "role": "system", "content":f'In case you need them, the following tools are recommended to execute this action: {json.dumps(action_tools)}'})  
@@ -1468,7 +1471,7 @@ class AgentCore:
 
             # The response of every handler always comes nested 
             clean_output = response['output']['output']['output'][-1]['output']
-            clean_output_str = json.dumps(clean_output)
+            clean_output_str = json.dumps(clean_output, cls=DecimalEncoder)
             
             interface = None
             if 'interface' in response['output']['output']['output'][-1]:
