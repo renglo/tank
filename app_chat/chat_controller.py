@@ -389,6 +389,9 @@ class ChatController:
             item = response_0['item']
             changed = False
             
+            # Convert any float values in the payload to strings
+            payload = self._convert_floats_to_strings(payload)
+            
             if 'state' in payload:
                 item['state'] = payload['state']
                 changed = True
@@ -404,6 +407,8 @@ class ChatController:
                 response = self.CHM.update_chat(item)
                 print(response)
                 return response
+            else:
+                print('No changes detected in workspace.')
         
         except Exception as e:
             current_app.logger.error(f"Error in update_workspace: {str(e)}")
