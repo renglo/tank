@@ -400,10 +400,12 @@ def process_gupshup_message(portfolio, tool_id, payload):
                 return result
                 
             new_thread_id = response_2['document']['_id'] 
+            
+            # This object emulates the object received via WebSocket
             input = {
-                'action':'gupshup_message', # We don't need this
+                'action':'gupshup_message', # We don't need this since this is not a websocket
                 'portfolio':portfolio,
-                'public_user': msg_sender,
+                'public_user': msg_sender, # The web socket version doesn't have this attribute
                 'entity_type':entity_type,
                 'entity_id':entity_id,
                 'thread':new_thread_id,

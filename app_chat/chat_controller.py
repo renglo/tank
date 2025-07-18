@@ -369,6 +369,10 @@ class ChatController:
                 "message": f"Error updating workspace: {str(e)}",
                 "status": 500
             }
+            
+            
+    
+    
                 
             
     
