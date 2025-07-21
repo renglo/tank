@@ -17,6 +17,7 @@ from decimal import Decimal
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 import time
+import uuid
 
 from env_config import OPENAI_API_KEY,WEBSOCKET_CONNECTIONS
 
@@ -115,7 +116,7 @@ class AgentCore:
         
         
     
-    def get_message_history_for_llm(self):
+    def get_message_history(self):
         
         action = 'get_message_history'
         #print(f'Running: {action}')
@@ -127,7 +128,7 @@ class AgentCore:
             print(f'entity_id :{self._get_context().entity_id}')
             print(f'thread :{self._get_context().thread}')
         
-            response = self.CHC.list_messages(
+            response = self.CHC.list_turns(
                             self._get_context().entity_type,
                             self._get_context().entity_id,
                             self._get_context().thread
@@ -141,11 +142,12 @@ class AgentCore:
             # Prepare messages to look like an OpenAI message array
             # Also remove messages that don't belong to an approved type
             message_list = []
-            for message in response['items']: 
-                for m in message['messages']:
+            for turn in response['items']: 
+                for m in turn['messages']:
                     out_message = m['_out']
                     if m['_type'] in ['user','system','text','tool_rq','tool_rs']: #OK to show to LLM
                         message_list.append(out_message)      
+            
             
             return {'success':True,'action':action,'input':self._get_context().thread,'output':message_list}
         
@@ -164,13 +166,13 @@ class AgentCore:
         
         try:
         
-            response = self.CHC.update_message(
+            response = self.CHC.update_turn(
                             self._get_context().entity_type,
                             self._get_context().entity_id,
                             self._get_context().thread,
                             self._get_context().chat_id,
                             update,
-                            call_id = call_id
+                            call_id=call_id
                         )
             
             if 'success' not in response:
@@ -206,8 +208,23 @@ class AgentCore:
         return {'success':True,'action':action,'input':update,'output':response}
     
     
+    def update_chat_message_context(self,doc,reset=False):
+        
+        if reset:
+            # Instead of trying to update the volatile context, just get the messages 
+            # from the Database
+            message_history = self.get_message_history()
+            self._update_context(message_history=message_history['output'])
+            
+        else:
+            # Adding to the context without having to call the DB
+            current_history = self._get_context().message_history
+            current_history.append(doc['_out'])
+            self._update_context(message_history=current_history)
+        
     
-    def save_chat(self,output):
+    
+    def save_chat(self,output,interface=False):
         
 
         if  output['tool_calls']  and output['role']=='assistant':
@@ -216,6 +233,7 @@ class AgentCore:
             doc = {'_out':self.sanitize(output),'_type':'tool_rq'}
              # Memorize to permanent storage
             self.update_chat_message_document(doc)
+            self.update_chat_message_context(doc)
             
             for tool_call in output['tool_calls']:
                 
@@ -226,6 +244,7 @@ class AgentCore:
                     }
                 doc_rs_placeholder = {'_out':rs_template,'_type':'tool_rs'}
                 self.update_chat_message_document(doc_rs_placeholder)
+                self.update_chat_message_context(doc_rs_placeholder)
             
             
         elif output['content'] and output['role']=='assistant':
@@ -234,17 +253,33 @@ class AgentCore:
             doc = {'_out':self.sanitize(output),'_type':message_type}
             # Memorize to permanent storage
             self.update_chat_message_document(doc)
+            self.update_chat_message_context(doc)
             # Print to live chat
             self.print_chat(output,message_type)
             # Print to API
             self.print_api(output['content'],message_type)
             
         elif 'tool_call_id' in output and 'role' in output and output['role']=='tool':
+            # This is a response from the tool
+                        
+            print(f'Including Tool Response in the chat: {output}')
             # This is the tool response
-            message_type = 'tool_rs'                
-            doc = {'_out':self.sanitize(output),'_type':message_type}
+            message_type = 'tool_rs'            
+            doc = {'_out':self.sanitize(output),'_type':message_type,'_interface':interface}
             # Memorize to permanent storage
             self.update_chat_message_document(doc,output['tool_call_id'])
+            self.update_chat_message_context(doc,reset=True)
+              
+            if interface:  
+                self.print_chat(doc,message_type,True)
+                           
+
+
+    def print_chat(self,output,type='text',as_is=False):
+        
+        if as_is:
+            doc = output             
+        elif isinstance(output, dict) and 'role' in output and 'content' in output and output['role'] and output['content']: 
                 
             if 'display_directly' in output['content']:  
                 self.print_chat(output,message_type)
@@ -480,15 +515,15 @@ class AgentCore:
     
     
     def llm(self, prompt):
-        
-        # Create base parameters
-        params = {
-            'model': prompt['model'],
-            'messages': prompt['messages'],
-            'temperature': prompt['temperature']
-        }
-        
+          
         try:
+            
+            # Create base parameters
+            params = {
+                'model': prompt['model'],
+                'messages': prompt['messages'],
+                'temperature': prompt['temperature']
+            }
         
             # Add optional parameters if they exist
             if 'tools' in prompt:
@@ -496,26 +531,20 @@ class AgentCore:
             if 'tool_choice' in prompt:
                 params['tool_choice'] = prompt['tool_choice']
                 
-            response = self.AI_1.chat.completions.create(**params)
+            response = self.AI_1.chat.completions.create(**params) 
             
-            #print(f'AS IS LLM RESPONSE:{response}')
+            # chat.completions.create might return an error if you include Decimal() as values
+            # Object of type Decimal is not JSON serializable
             
             return response.choices[0].message
  
         
         except Exception as e:
             print(f"Error running LLM call: {e}")
-            # Only print raw response if it exists
-            
-            return {
-                'success': False,
-                'action': 'llm',
-                'input': prompt,
-                'output': str(e)
-            }
+            # Only print raw response if it exists 
+            return False
     
-    
-    
+
     
     def new_chat_message_document(self,message):
         
@@ -532,7 +561,11 @@ class AgentCore:
         message_context['thread'] = self._get_context().thread
           
         new_message = { "role": "user", "content": message }
-        msg_wrap = {"_out":new_message,"_type":"text"}
+        msg_wrap = {
+            "_out":new_message,
+            "_type":"text",
+            "_id":str(uuid.uuid4()) # This is the Message ID
+        }
         
         # Append new message to volatile context
         current_history = self._get_context().message_history
@@ -547,7 +580,7 @@ class AgentCore:
         #message_object['output'] = [msg_wrap]
         message_object['messages'] = [msg_wrap]
                  
-        response = self.CHC.create_message(
+        response = self.CHC.create_turn(
                         self._get_context().entity_type,
                         self._get_context().entity_id,
                         self._get_context().thread,
@@ -913,6 +946,50 @@ class AgentCore:
             
         return {"success":True,"action":action,"output":response}
 
+    def clear_tool_message_content(self, message_list, recent_tool_messages=1):
+        """
+        Clear content from all tool messages except the last x ones.
+        This prevents overwhelming the LLM with tool output history.
+        
+        Args:
+            message_list: List of messages to process
+            recent_tool_messages: Number of recent tool messages to keep with content (default: 1)
+        """
+        print(f'Raw message_list:{message_list}')
+        # {'success': True, 'action': 'get_message_history', 'input': '531fdfa8-9f60-4c8d-b046-6fa06d6f2a76', 'output': [{'content': "I'm looking for a hotel", 'role': 'user'}]}
+        # Find the indices of the last x tool messages
+        tool_indices = []
+        for i in range(len(message_list) - 1, -1, -1):
+            if message_list[i].get('role') == 'tool':
+                tool_indices.append(i)
+                if len(tool_indices) >= recent_tool_messages:
+                    break
+        
+        # Clear content from all tool messages except the last x ones
+        for i, message in enumerate(message_list):
+            if message.get('role') == 'tool' and i not in tool_indices:
+                print(f'Found a tool message:{message}')
+                # Actually clear the content (set to empty string)
+                message['content'] = ""
+            else:
+                # Convert complex content to string format for OpenAI API
+                if isinstance(message.get('content'), list):
+                    # If content is an array, sanitize and convert it to a JSON string
+                    sanitized_content = self.sanitize(message['content'])
+                    message['content'] = json.dumps(sanitized_content)
+                elif isinstance(message.get('content'), dict):
+                    # If content is an object, sanitize and convert it to a JSON string
+                    sanitized_content = self.sanitize(message['content'])
+                    message['content'] = json.dumps(sanitized_content)
+                else:
+                    # If content is already a string or other type, sanitize and convert to string
+                    sanitized_content = self.sanitize(message.get('content', ''))
+                    message['content'] = str(sanitized_content)
+                
+        print(f'Cleared tool message content:{message_list}')
+        
+        return message_list
+
     # -------------------------------------------------------- LOOP FUNCTIONS
     
     
@@ -1134,14 +1211,22 @@ class AgentCore:
     
     
     
-    def interpret(self):
+    def interpret(self,no_tools=False):
         
         action = 'interpret'
         self.print_chat('Interpreting message...', 'text')
         print('interpret')
         
         try:
-            message_list = self._get_context().message_history
+            # We get the message history directly from the source of truth to avoid missing tool id calls. 
+            message_list = self.get_message_history()
+            
+            # Go through the message_list and replace the value of the 'content' attribute with an empty object when the role is 'tool'
+            # Unless the last message it a tool response which the interpret function needs to process. 
+            # The reason is that we don't want to overwhelm the LLM with the contents of the history of tool outputs. 
+            
+            # Clear content from all tool messages except the last one
+            message_list = self.clear_tool_message_content(message_list['output'])
             
             
             # Get current time and date
@@ -1155,7 +1240,7 @@ class AgentCore:
             print(f'Current Action:{current_action}')
             
             action_instructions = '' 
-            action_tools = []
+            action_tools = ''
             list_actions = self._get_context().list_actions
             
             for a in list_actions:
@@ -1176,8 +1261,7 @@ class AgentCore:
 
             # Desire
             current_desire = workspace.get('state', {}).get('desire', '') if workspace else ''
-            desire_str = 'Current goal:' + current_desire
-            print(f'Current Desire:{desire_str}')
+            print(f'Current Desire:{current_desire}')
             
             # Meta Instructions
             meta_instructions = {}
@@ -1201,10 +1285,15 @@ class AgentCore:
             for msg in message_list:      
                 messages.append(msg)       
                 
+            # Initialize approved_tools with default empty list
+            approved_tools = []
+                
             # Request asking the recommended tools for this action
-            if action_tools:
-                messages.append({ "role": "system", "content":f'In case you need them, the following tools are recommended to execute this action: {json.dumps(action_tools)}'})                      
-            
+            if action_tools and not no_tools:
+                messages.append({ "role": "system", "content":f'In case you need them, the following tools are recommended to execute this action: {json.dumps(action_tools)}'})  
+                
+                approved_tools = [tool.strip() for tool in action_tools.split(',')]
+                    
             # Tools           
             '''   
             tool.input should look like this in the database:
@@ -1222,61 +1311,71 @@ class AgentCore:
                     }
                 }
             '''
-              
-            list_tools_raw = self._get_context().list_tools
             
-            print(f'List Tools:{list_tools_raw}')
             
-            list_tools = [] 
-            for t in list_tools_raw:
-                # Parse the escaped JSON string into a Python object
-                try:
-                    tool_input = json.loads(t.get('input', '[]'))
-                except json.JSONDecodeError:
-                    print(f"Warning: Invalid JSON in tool input for tool {t.get('key', 'unknown')}. Using empty array.")
-                    tool_input = []
+            if no_tools:                
+                list_tools = None      
+                   
+            else:         
+                list_tools_raw = self._get_context().list_tools
                 
-                dict_params = {}
-                required_params = []
+                print(f'List Tools:{list_tools_raw}')
                 
-                # Handle new format: array of objects with name, hint, required
-                if isinstance(tool_input, list):
-                    for param in tool_input:
-                        if isinstance(param, dict) and 'name' in param and 'hint' in param:
-                            param_name = param['name']
-                            param_hint = param['hint']
-                            param_required = param.get('required', False)
-                            
-                            dict_params[param_name] = {
-                                'type': 'string',
-                                'description': param_hint
-                            }
-                            
-                            if param_required:
-                                required_params.append(param_name)
-                # Handle old format for backward compatibility
-                elif isinstance(tool_input, dict):
-                    for key, val in tool_input.items():
-                        dict_params[key] = {'type': 'string', 'description': val}
-                        required_params.append(key)
+                list_tools = [] 
+                for t in list_tools_raw:
                     
-                tool = {
-                    'type': 'function',
-                    'function': {
-                        'name': t.get('key', ''),
-                        'description': t.get('goal', ''),
-                        'parameters': {
-                            'type': 'object',
-                            'properties': dict_params,
-                            'required': required_params
-                        }
-                    }    
-                }
-                
-                #print(f'Tool:{tool}')       
-                list_tools.append(tool)          
-                #print(f'List Tools:{list_tools}')
+                    if t.get('key') in approved_tools:
+                        # Parse the escaped JSON string into a Python object
+                        try:
+                            tool_input = json.loads(t.get('input', '[]'))
+                        except json.JSONDecodeError:
+                            print(f"Invalid JSON in tool input for tool {t.get('key', 'unknown')}. Using empty array.")
+                            tool_input = []
                         
+                        dict_params = {}
+                        required_params = []
+                        
+                        # Handle new format: array of objects with name, hint, required
+                        if isinstance(tool_input, list):
+                            for param in tool_input:
+                                if isinstance(param, dict) and 'name' in param and 'hint' in param:
+                                    param_name = param['name']
+                                    param_hint = param['hint']
+                                    param_required = param.get('required', False)
+                                    
+                                    dict_params[param_name] = {
+                                        'type': 'string',
+                                        'description': param_hint
+                                    }
+                                    
+                                    if param_required:
+                                        required_params.append(param_name)
+                        # Handle old format for backward compatibility
+                        elif isinstance(tool_input, dict):
+                            for key, val in tool_input.items():
+                                dict_params[key] = {'type': 'string', 'description': val}
+                                required_params.append(key)
+                                
+                        print(f'Required parameters:{required_params}')
+                            
+                        tool = {
+                            'type': 'function',
+                            'function': {
+                                'name': t.get('key', ''),
+                                'description': t.get('goal', ''),
+                                'parameters': {
+                                    'type': 'object',
+                                    'properties': dict_params,
+                                    'required': required_params
+                                }
+                            }    
+                        }
+                        
+                        #print(f'Tool:{tool}')       
+                        list_tools.append(tool)          
+                        #print(f'List Tools:{list_tools}')
+                    
+                    
             # Prompt
             prompt = {
                     "model": self.AI_1_MODEL,
@@ -1286,16 +1385,31 @@ class AgentCore:
                     "tool_choice": "auto"
                 }
             
-            response = self.llm(prompt)
+            
+            prompt = self.sanitize(prompt)
+            
             print(f'RAW PROMPT >> {prompt}')
+    
+            response = self.llm(prompt)
+            
             print(f'RAW RESPONSE >> {response}')
+          
+            
+            if not response:
+                return {
+                    'success': False,
+                    'action': action,
+                    'input': '',
+                    'output': response
+                }
+                
             
             validation = self.validate_interpret_openai_llm_response(response)
             if not validation['success']:
                 return {
                     'success': False,
                     'action': action,
-                    'input': prompt,
+                    'input': response,
                     'output': validation
                 }
             
@@ -1325,6 +1439,28 @@ class AgentCore:
     ## Execution of Intentions
     def act(self,plan):
         action = 'act'
+        
+       
+        '''
+        
+        'plan' is the response from the LLM. 
+        'plan' has this format:
+        
+         plan = {
+            'tool_calls':[
+                {
+                  'id': STRING
+                  'function':{
+                      'name': STRING
+                      'arguments': OBJECT
+                  }  
+                }
+                
+            ] 
+        }
+        
+        '''
+        
         
         
         list_tools_raw = self._get_context().list_tools
@@ -1387,6 +1523,13 @@ class AgentCore:
 
             portfolio = self._get_context().portfolio
             org = self._get_context().org
+            
+            params['_portfolio'] = self._get_context().portfolio
+            params['_org'] = self._get_context().org
+            params['_entity_type'] = self._get_context().entity_type
+            params['_entity_id'] = self._get_context().entity_id
+            params['_thread'] = self._get_context().thread
+            
   
             #self.print_chat(f'Calling {handler_route} ','text') 
             print(f'Calling {handler_route} ') 
@@ -1398,11 +1541,15 @@ class AgentCore:
             if not response['success']:
                 return {'success':False,'action':action,'input':params,'output':response}
 
+            # The response of every handler always comes nested 
             clean_output = response['output']['output']['output'][-1]['output']
-            clean_output_str = json.dumps(clean_output)
-        
+            clean_output_str = json.dumps(clean_output, cls=DecimalEncoder)
             
-            print(f'flag1')
+            interface = None
+            if 'interface' in response['output']['output']['output'][-1]:
+                interface = response['output']['output']['output'][-1]['interface']
+
+               
             
             tool_out = {
                     "role": "tool",
@@ -1411,14 +1558,13 @@ class AgentCore:
                     "tool_calls":False
                 }
             
-            if 'display_directly' in clean_output:
-                tool_out['display_directly'] = True
-            
-            print(f'flag2')
-            
-            
+
             # Save the message after it's created
-            self.save_chat(tool_out)
+            if interface:
+                self.save_chat(tool_out,interface=interface)
+            else:
+                self.save_chat(tool_out)
+                
             
             print(f'flag3')
             
@@ -1522,10 +1668,12 @@ class AgentCore:
     
     
     
-
-    
     def run(self,payload):
         # Initialize a new request context
+        action = 'run'
+        print(f'Running: {action}')
+        print(f'Payload: {payload}')  
+        
         context = RequestContext()
         
         # Update context with payload data
@@ -1572,12 +1720,9 @@ class AgentCore:
         self._set_context(context)
         
         results = []
-        action = 'run'
-        print(f'Running: {action}')
-        print(f'Payload: {payload}')  
-        
+         
         # Get the initial chat message history and put it in the context
-        message_history = self.get_message_history_for_llm()
+        message_history = self.get_message_history()
         if not message_history['success']:
             return {'success':False,'action':action,'output':message_history}
             
@@ -1599,8 +1744,9 @@ class AgentCore:
             if not response_0b['success']: 
                 return {'success':False,'action':action,'output':results}
             
+            
             loops = 0
-            loop_limit = 3
+            loop_limit = 6
             while loops < loop_limit:
                 loops = loops + 1
                 print(f'Loop iteration {loops}/{loop_limit}')
@@ -1624,39 +1770,34 @@ class AgentCore:
                     # Step 2: Act. Agent runs the tool
                     response_2 = self.act(response_1['output'])
                     results.append(response_2)
+                    
+                    
+                    # Step 3: Check if answer needs to go out without LLM interpretation
+                    #if 'direct_out' in response_2:
+                        
+                    
+                    
+                    
                     if not response_2['success']:
                         # Something went wrong during tool execution
                         return {'success':False,'action':action,'output':results}
                     
-                    # Check if the tool wants to show results directly        
-                    if 'display_directly' in response_2['output']:
-                        # Return the raw results of the tool skipping reflection.
-                        return {'success':True,'action':action,'output':results} 
                     
-                    # Step 3: Reflect. LLM sees the result and crafts human output
-                    response_3 = self.interpret()
-                    results.append(response_3)
-                    if not response_3['success']:
-                        return {'success':False,'action':action,'output':results}
                     
-                    # Check if the reflection resulted in more tool calls
-                    if 'tool_calls' in response_3['output'] and response_3['output']['tool_calls']:
-                        # Continue the loop for the next tool call
-                        print(f'Continuing loop for additional tool calls...')
-                        continue
-                    else:
-                        # No more tool calls, we're done
-                        self.print_chat(f'🤖','text')
-                        return {'success':True,'action':action,'input':payload,'output':results}
+            
+            #Gracious exit. Analyze the last tool run (act()) but you can't issue a new tool_call. 
+            response_1 = self.interpret(no_tools=True)
+            results.append(response_1)
+            if not response_1['success']:
+                    # Something went wrong during message interpretation
+                    return {'success':False,'action':action,'output':results} 
+            
             
             # If we reach here, we hit the loop limit
             print(f'Warning: Reached maximum loop limit ({loop_limit})')
-            self.print_chat(f'🤖⚠️ (Max iterations reached)','text')
+            #self.print_chat(f'🤖⚠️  Can you re-formulate your request please?','text')
             return {'success':True,'action':action,'input':payload,'output':results}
                     
-
-
-
 
             
         except Exception as e:

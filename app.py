@@ -60,8 +60,19 @@ else:
 if app.config['IS_LAMBDA']:
     app.logger.info('TANK_BASE_URL:'+str(app.config['TANK_BASE_URL']))  
     app.logger.info('TANK_FE_BASE_URL:'+str(app.config['TANK_FE_BASE_URL'])) 
+    
+    # Build origins list safely
+    origins = [app.config['TANK_FE_BASE_URL']]
+    
+    # Add APP_FE_BASE_URL if it exists in config
+    if 'APP_FE_BASE_URL' in app.config and app.config['APP_FE_BASE_URL']:
+        app.logger.info('APP_FE_BASE_URL:'+str(app.config['APP_FE_BASE_URL'])) 
+        origins.append(app.config['APP_FE_BASE_URL'])
+    else:
+        app.logger.info('APP_FE_BASE_URL not found in config')
+    
     app.logger.info('RUNNING ON LAMBDA ENVIRONMENT') 
-    CORS(app, resources={r"*": {"origins": [app.config['TANK_FE_BASE_URL']]}})
+    CORS(app, resources={r"*": {"origins": origins}})
 else:
     app.logger.info('RUNNING ON LOCAL ENVIRONMENT')  
     CORS(app, resources={r"/*": {"origins": ["http://127.0.0.1:5173", "http://localhost:5173", "http://127.0.0.1:3000"]}})

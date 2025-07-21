@@ -5,7 +5,10 @@ from flask_cognito import current_cognito_jwt
 from datetime import datetime
 from common import *
 import uuid
+import json
+import boto3
 
+from env_config import WEBSOCKET_CONNECTIONS
 
 
 class ChatController:
@@ -13,6 +16,36 @@ class ChatController:
     def __init__(self,tid=None,ip=None):
 
         self.CHM = ChatModel(tid=tid,ip=ip)
+        
+        
+    def error_chat(self,error,connection_id):
+    
+        try:
+            self.apigw_client = boto3.client("apigatewaymanagementapi", endpoint_url=WEBSOCKET_CONNECTIONS)
+        
+        except Exception as e:
+            print(f"Error initializing WebSocket client: {e}")
+            self.apigw_client = None
+        
+     
+        try:
+            print(f'Sending Error Message to:{connection_id}')
+            
+            # WebSocket
+            self.apigw_client.post_to_connection(
+                ConnectionId=connection_id,
+                Data=error
+            )
+               
+            print(f'Error Message has been sent: {error}')
+            return True
+        
+        except self.apigw_client.exceptions.GoneException:
+            print(f'Connection is no longer available')
+            return False
+        except Exception as e:
+            print(f'Error sending message: {str(e)}')
+            return False
         
         
     def get_current_user(self):
@@ -73,11 +106,13 @@ class ChatController:
     
     
     
-    # MESSAGES
+    # TURNS
+    # There is a document per turn in the database
+    # Every turn document contains a list of messages that belong to that turn
     
-    def list_messages(self,entity_type,entity_id,thread_id):
+    def list_turns(self,entity_type,entity_id,thread_id):
               
-        index = f"irn:chat:{entity_type}/thread/message:{entity_id}/{thread_id}"
+        index = f"irn:chat:{entity_type}/thread/turn:{entity_id}/{thread_id}"
         limit = 50
         sort = 'asc'
         
@@ -86,23 +121,23 @@ class ChatController:
         return response
     
     
-    def get_message(self, entity_type, entity_id, thread_id, message_id):
+    def get_turn(self, entity_type, entity_id, thread_id, turn_id):
         
-        index = f"irn:chat:{entity_type}/thread/message:{entity_id}/{thread_id}" 
-        print(f'get_message > {index} > {message_id}') 
-        response = self.CHM.get_chat(index,message_id) 
+        index = f"irn:chat:{entity_type}/thread/turn:{entity_id}/{thread_id}" 
+        print(f'get_turn > {index} > {turn_id}') 
+        response = self.CHM.get_chat(index,turn_id) 
         return response
     
     
-    def create_message(self, entity_type, entity_id, thread_id, payload):
-        print('CHC:create_message')
+    def create_turn(self, entity_type, entity_id, thread_id, payload):
+        print('CHC:create_turn')
         try:
             if not all([entity_type, entity_id, thread_id, payload]):
                 raise ValueError("Missing required parameters")
 
-            index = f"irn:chat:{entity_type}/thread/message:{entity_id}/{thread_id}"
+            index = f"irn:chat:{entity_type}/thread/turn:{entity_id}/{thread_id}"
             
-            current_app.logger.debug(f'create_message > input > {index}')
+            current_app.logger.debug(f'create_turn > input > {index}')
             current_app.logger.debug(f'payload: {payload}')
             
             # Validate required payload fields
@@ -129,7 +164,7 @@ class ChatController:
                 'context': payload['context'],
                 'messages': messages,
                 'index': index,
-                '_id': str(uuid.uuid4())
+                '_id': str(uuid.uuid4()) # This is the turn ID 
             }
             
             current_app.logger.debug(f'Prepared data for chat creation: {data}')
@@ -138,10 +173,10 @@ class ChatController:
             return response
             
         except Exception as e:
-            current_app.logger.error(f"Error in create_message: {str(e)}")
+            current_app.logger.error(f"Error in create_turn: {str(e)}")
             return {
                 "success": False,
-                "message": f"Error creating message: {str(e)}",
+                "message": f"Error creating turn: {str(e)}",
                 "status": 500
             }
         
@@ -158,42 +193,13 @@ class ChatController:
             return str(obj)
         return obj
 
-    def update_message_x(self,entity_type, entity_id, thread_id, message_id, update):
-        print(f'CHC:update_message {entity_type}/{thread_id}/{message_id}:{update}')
-        try:
-            data = self.get_message(entity_type, entity_id, thread_id, message_id)
-            
-            if not data['success']:
-                return data
-            
-            item = data['item']
-            #print(f'Document retrieved:{item}')
-            
-            if 'messages' not in item or not isinstance(item['messages'], list):
-                item['messages'] = []
-            
-            # Convert any float values in the update to strings
-            update = self._convert_floats_to_strings(update)
-            item['messages'].append(update)
-            
-            #current_app.logger.debug(f'Prepared data for chat update: {item}')
-            response = self.CHM.update_chat(item)
-            print(response) 
-            return response
-        
-        except Exception as e:
-            current_app.logger.error(f"Error in update_message: {str(e)}")
-            return {
-                "success": False,
-                "message": f"Error updating message: {str(e)}",
-                "status": 500
-            }
+    
             
     
-    def update_message(self,entity_type, entity_id, thread_id, message_id, update, call_id=False):
-        print(f'CHC:update_message {entity_type}/{thread_id}/{message_id}:{update}')
+    def update_turn(self,entity_type, entity_id, thread_id, turn_id, update, call_id=False):
+        print(f'CHC:update_turn {entity_type}/{thread_id}/{turn_id}:{update}::{call_id}')
         try:
-            data = self.get_message(entity_type, entity_id, thread_id, message_id)
+            data = self.get_turn(entity_type, entity_id, thread_id, turn_id)
             
             if not data['success']:
                 return data
@@ -205,10 +211,46 @@ class ChatController:
                 item['messages'] = []
             
             
-            if call_id:   
+            if call_id: 
+                print('Call id found:')  
+                print(item['messages'])
                 for i in item['messages']:
                     if 'tool_call_id' in i['_out'] and i['_out']['tool_call_id'] == call_id:
-                        i = update # update has the shape {'_out':... , '_type':...} You are replacing the entire object
+                        print(f'Found the message with matching id:{i}')
+                        print(f'Replacing with new doc:{update}') 
+                        # Find the index of the item in the list
+                        index = item['messages'].index(i)
+                        # Parse JSON string to Python object and replace content
+                        try:
+                            parsed_content = json.loads(update['_out']['content'])
+                            
+                            # Validate and normalize the parsed content
+                            if isinstance(parsed_content, dict):
+                                # If it's a single object, wrap it in a list
+                                parsed_content = [parsed_content]
+                            elif isinstance(parsed_content, list):
+                                # If it's a list, validate that all items are dictionaries
+                                if not all(isinstance(item, dict) for item in parsed_content):
+                                    # If any item is not a dict, use original content
+                                    parsed_content = update['_out']['content']
+                            else:
+                                # If it's neither dict nor list, use original content
+                                parsed_content = update['_out']['content']
+                                
+                            parsed_content = self._convert_floats_to_strings(parsed_content)
+                            item['messages'][index]['_out']['content'] = parsed_content
+                            
+                            if '_interface' in update:
+                                item['messages'][index]['_interface'] = update['_interface']
+                                
+                            print(item['messages'][index])
+                            
+                            
+                        except json.JSONDecodeError as e:
+                            print(f"Error parsing JSON content: {e}")
+                            # If JSON parsing fails, keep the original string
+                            parsed_content = self._convert_floats_to_strings(update['content'])
+                            item['messages'][index]['_out']['content'] = parsed_content
             else:
                     
                 # Convert any float values in the update to strings
@@ -216,12 +258,13 @@ class ChatController:
                 item['messages'].append(update)
             
             #current_app.logger.debug(f'Prepared data for chat update: {item}')
+            print(f'Store modified item:{item}')
             response = self.CHM.update_chat(item)
             print(response) 
             return response
         
         except Exception as e:
-            current_app.logger.error(f"Error in update_message: {str(e)}")
+            current_app.logger.error(f"Error in update_turn: {str(e)}")
             return {
                 "success": False,
                 "message": f"Error updating message: {str(e)}",
@@ -346,6 +389,9 @@ class ChatController:
             item = response_0['item']
             changed = False
             
+            # Convert any float values in the payload to strings
+            payload = self._convert_floats_to_strings(payload)
+            
             if 'state' in payload:
                 item['state'] = payload['state']
                 changed = True
@@ -361,6 +407,8 @@ class ChatController:
                 response = self.CHM.update_chat(item)
                 print(response)
                 return response
+            else:
+                print('No changes detected in workspace.')
         
         except Exception as e:
             current_app.logger.error(f"Error in update_workspace: {str(e)}")

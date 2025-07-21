@@ -28,6 +28,7 @@ AGC = AgentController()
 AUC = AuthController()
 
 
+
 def socket_auth_required(f):
     @wraps(f)
     def wrapped(*args, **kwargs):
@@ -36,13 +37,17 @@ def socket_auth_required(f):
             payload = request.get_json()
             
             if not payload or 'auth' not in payload:
-                current_app.logger.error("Missing payload or auth token in request")
-                return jsonify({'error': 'Authentication token required'}), 401
+                error_msg= "Missing payload or auth token in request"
+                current_app.logger.error(error_msg)
+                CHC.error_chat(error_msg,payload['connection_id'])
+                return jsonify({'error': error_msg}), 401
             
             auth_token = payload['auth']
             if not isinstance(auth_token, str):
-                current_app.logger.error("Invalid auth token format")
-                return jsonify({'error': 'Invalid authentication token format'}), 401
+                error_msg= "Invalid auth token format"
+                current_app.logger.error(error_msg)
+                CHC.error_chat(error_msg,payload['connection_id'])
+                return jsonify({'error': error_msg}), 401
 
             # Set the token in the request headers for cognito authentication
             with current_app.test_request_context(headers={'Authorization': f'Bearer {auth_token}'}):
@@ -50,6 +55,7 @@ def socket_auth_required(f):
                     cognito_auth_required(lambda: None)()
                 except Exception as cognito_error:
                     current_app.logger.error(f"Cognito authentication failed: {str(cognito_error)}")
+                    CHC.error_chat(str(cognito_error),payload['connection_id'])
                     return jsonify({'error': 'Invalid or expired authentication token'}), 401
 
             current_app.logger.info("Socket authentication successful")
@@ -172,7 +178,7 @@ def chat_messages(entity_type,entity_id,thread_id):
     
     
     if request.method == 'GET':
-        response = CHC.list_messages(entity_type,entity_id,thread_id)  
+        response = CHC.list_turns(entity_type,entity_id,thread_id)  
 
         
     return response
