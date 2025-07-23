@@ -355,7 +355,7 @@ WebSocket URL and @connections URL . Copy them somewhere
 ------------------
 
 
-Step 5 > Let the FrontEnd and BackEnd where to connect to the WebSocket
+Step 5 > Tell the FrontEnd and BackEnd where to connect to the WebSocket
 
 Go to the Stages section on the left menu, 
 Select the environment you just created (dev|prod)
