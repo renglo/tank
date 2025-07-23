@@ -406,10 +406,12 @@ def process_gupshup_message(portfolio, tool_id, payload):
                 return result
                 
             new_thread_id = response_2['document']['_id'] 
+            
+            # This object emulates the object received via WebSocket
             input = {
-                'action':'gupshup_message', # We don't need this
+                'action':'gupshup_message', # We don't need this since this is not a websocket
                 'portfolio':portfolio,
-                'public_user': msg_sender,
+                'public_user': msg_sender, # The web socket version doesn't have this attribute
                 'entity_type':entity_type,
                 'entity_id':entity_id,
                 'thread':new_thread_id,
@@ -428,57 +430,6 @@ def process_gupshup_message(portfolio, tool_id, payload):
 
 
 
-# This is the function the WebHook receiving function
-@app_chat.route('/gs_in/<string:portfolio>/<string:tool_id>', methods=['POST'])
-def gupshup_in(portfolio,tool_id):
-    
-    # Get the payload first
-    gupshup_payload = request.get_json()
-    
-    current_app.logger.info(f"Load G:{gupshup_payload}")
-    
-    tool_id = 'ca1a009b27d8' # This is a patch. You need to correct the Gubshup URL 
-    
-    # Send to EventBridge for async processing
-    
-    try:
-        import boto3
-        import json
-        
-        events = boto3.client('events')
-        events.put_events(
-            Entries=[
-                {
-                    'Source': 'custom.gupshup.webhook',
-                    'DetailType': 'GupshupMessage',
-                    'Detail': json.dumps({
-                        'portfolio': portfolio,
-                        'tool_id': tool_id,
-                        'gupshup_payload': gupshup_payload
-                    }),
-                    'EventBusName': 'default'
-                }
-            ]
-        )
-        current_app.logger.info(f"Event sent to EventBridge for portfolio: {portfolio}, tool: {tool_id}, payload:{gupshup_payload}")
-        
-    except Exception as e:
-        current_app.logger.error(f"Failed to send event to EventBridge: {e}")
-        # Still return success to avoid webhook retries
-    
-    
-    # Return acknowledgment immediately
-    return "", 200
-
-@app_chat.route('/gs_in/<string:portfolio>/<string:tool_id>/', methods=['POST'])
-@cognito_auth_required
-def gupshup_in_with_slash(portfolio, tool_id):
-    # Call the same function to avoid code duplication
-    return gupshup_in(portfolio, tool_id)
-
-
-
-#https://apidev.woppi.ai/_chat/gs_in/5038a960fde7/ca1a009b27d8
 
 
 
