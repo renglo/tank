@@ -12,8 +12,8 @@ class SchdLoader:
   
         
     def convert_module_name_to_class(self,input_string):
-        # Step 1: Split the string at '/'
-        after_slash = input_string.split('/')[-1]
+        # Step 1: Get the basename (last part of the path) in a cross-platform way
+        after_slash = os.path.basename(input_string)
         
         # Step 2: Replace '_' with spaces
         words = after_slash.replace('_', ' ')
@@ -31,11 +31,18 @@ class SchdLoader:
         """Recursively finds all Python modules inside the modules directory."""
         module_list = []
         print('Discovering modules')
-        path = f'_tools/{module_path}/handlers'
-        #path = f'../tools/{module_path}/handlers'
+        
+        # Use os.path.join for cross-platform path construction
+        path = os.path.join('_tools', module_path, 'handlers')
         
         # Resolve the absolute path first
         base_path = os.path.abspath(path)
+        print(f'Searching in: {base_path}')
+        
+        # Check if the directory exists
+        if not os.path.exists(base_path):
+            print(f'Directory not found: {base_path}')
+            return module_list
         
         for root, _, files in os.walk(base_path):
             for file in files:
@@ -49,7 +56,10 @@ class SchdLoader:
                     if module_relative_path == ".":
                         full_module_path = module_name  # Top-level module
                     else:
-                        full_module_path = f"{module_relative_path.replace(os.sep, '.')}.{module_name}"
+                        # Use os.path.normpath to handle path separators properly
+                        normalized_path = os.path.normpath(module_relative_path)
+                        # Replace path separators with dots for module notation
+                        full_module_path = f"{normalized_path.replace(os.sep, '.')}.{module_name}"
 
                     module_list.append(full_module_path)
         return module_list
@@ -61,20 +71,31 @@ class SchdLoader:
         module_list = []
         print('Discovering modules')
         
-        for root, _, files in os.walk(self.module_path):
+        # Resolve the absolute path first
+        base_path = os.path.abspath(self.module_path)
+        
+        # Check if the directory exists
+        if not os.path.exists(base_path):
+            print(f'Directory not found: {base_path}')
+            return module_list
+        
+        for root, _, files in os.walk(base_path):
             
             for file in files:
                 print(f'File:{file}')
                 if file.endswith(".py") and file != "__init__.py":
                     print(f'File ok')
                     # Convert file path into a module path (e.g., "social.create_post")
-                    module_relative_path = os.path.relpath(root, self.module_path)  # Get relative path from base folder
+                    module_relative_path = os.path.relpath(root, base_path)  # Get relative path from base folder
                     module_name = file[:-3]  # Remove .py extension
 
                     if module_relative_path == ".":
                         full_module_path = module_name  # Top-level module
                     else:
-                        full_module_path = f"{module_relative_path.replace(os.sep, '.')}.{module_name}"
+                        # Use os.path.normpath to handle path separators properly
+                        normalized_path = os.path.normpath(module_relative_path)
+                        # Replace path separators with dots for module notation
+                        full_module_path = f"{normalized_path.replace(os.sep, '.')}.{module_name}"
 
                     module_list.append(full_module_path)
         return module_list
@@ -90,7 +111,10 @@ class SchdLoader:
             current_app.logger.debug(f"Module {module_name}:{class_name} was found.")
         
         try:
-            sys.path.append(os.path.abspath(".."))  # Add parent directory to sys.path
+            # Add parent directory to sys.path in a cross-platform way
+            parent_dir = os.path.abspath("..")
+            if parent_dir not in sys.path:
+                sys.path.append(parent_dir)
             
             # Convert file path to module path format (using dots)
             module_path = f"_tools.{module_path}.handlers.{module_name}"
@@ -126,7 +150,10 @@ class SchdLoader:
             class_name = self.convert_module_name_to_class(module_name)
             current_app.logger.info(f'Attempting to load class:{class_name}')
             
-            module_parts = module_name.split("/")
+            # Use os.path.normpath to handle different path separators
+            normalized_module_name = os.path.normpath(module_name)
+            # Split using os.path.sep to be cross-platform
+            module_parts = normalized_module_name.split(os.sep)
             payload = kwargs.get('payload')  # Extract payload from kwargs
             
             instance = self.load_code_class(module_parts[0],module_parts[1], class_name, *args, **kwargs)

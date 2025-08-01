@@ -1474,7 +1474,7 @@ class AuthController:
 
 
 
-
+        '''
         
         #All went good, Summarize Transaction Success 
         current_app.logger.debug('End of Funnel ')
@@ -1488,7 +1488,7 @@ class AuthController:
         return result
     
 
-        '''
+        
 
 
 
