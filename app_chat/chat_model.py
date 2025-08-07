@@ -79,6 +79,7 @@ class ChatModel:
             
             result['success'] = False
             result['message'] = 'Items could not be retrieved'
+            result['items'] = all_items
             result['error'] = str(e)
             status = 400
             return result
