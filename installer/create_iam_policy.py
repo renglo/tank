@@ -59,6 +59,7 @@ def create_iam_policy(env_name, cognito_user_pool_id, aws_region, aws_profile):
                     f"arn:aws:dynamodb:{aws_region}:{aws_account_id}:table/{env_name}_blueprints",
                     f"arn:aws:dynamodb:{aws_region}:{aws_account_id}:table/{env_name}_data",
                     f"arn:aws:dynamodb:{aws_region}:{aws_account_id}:table/{env_name}_chat",
+                    f"arn:aws:dynamodb:{aws_region}:{aws_account_id}:table/{env_name}_chat/index/entity_index",
                     f"arn:aws:dynamodb:{aws_region}:{aws_account_id}:table/{env_name}_entities",
                     f"arn:aws:dynamodb:{aws_region}:{aws_account_id}:table/{env_name}_rel",
                     f"arn:aws:dynamodb:{aws_region}:{aws_account_id}:table/{env_name}_data/index/path_index"
@@ -129,10 +130,35 @@ def create_iam_policy(env_name, cognito_user_pool_id, aws_region, aws_profile):
     try:
         existing_policy = iam_client.get_policy(PolicyArn=f"arn:aws:iam::{aws_account_id}:policy/{policy_name}")
         policy_arn = existing_policy["Policy"]["Arn"]
-        print(f"✅ IAM Policy '{policy_name}' already exists. Skipping creation.")
-        print(f"🔹 Policy Name: {policy_name}")
-        print(f"🔹 Policy ARN: {policy_arn}")
-        return policy_name, policy_arn, s3_bucket_name
+        
+        # Get the current policy version
+        policy_versions = iam_client.list_policy_versions(PolicyArn=policy_arn)
+        current_version = next((v for v in policy_versions['Versions'] if v['IsDefaultVersion']), None)
+        
+        if current_version:
+            # Get the current policy document
+            current_policy = iam_client.get_policy_version(PolicyArn=policy_arn, VersionId=current_version['VersionId'])
+            current_document = current_policy['PolicyVersion']['Document']
+            
+            # Check if the policy needs updating (compare with new document)
+            if current_document == policy_document:
+                print(f"✅ IAM Policy '{policy_name}' already exists and is up to date. Skipping creation.")
+                print(f"🔹 Policy Name: {policy_name}")
+                print(f"🔹 Policy ARN: {policy_arn}")
+                return policy_name, policy_arn, s3_bucket_name
+            else:
+                print(f"🔄 IAM Policy '{policy_name}' exists but needs updating. Creating new version...")
+                # Create new policy version
+                iam_client.create_policy_version(
+                    PolicyArn=policy_arn,
+                    PolicyDocument=json.dumps(policy_document),
+                    SetAsDefault=True
+                )
+                print(f"✅ IAM Policy '{policy_name}' updated successfully!")
+                print(f"🔹 Policy Name: {policy_name}")
+                print(f"🔹 Policy ARN: {policy_arn}")
+                return policy_name, policy_arn, s3_bucket_name
+                
     except iam_client.exceptions.NoSuchEntityException:
         # Policy doesn't exist, proceed with creation
         pass

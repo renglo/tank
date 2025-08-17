@@ -129,6 +129,8 @@ class AgentCore:
             print(f'thread :{self._get_context().thread}')
         
             response = self.CHC.list_turns(
+                            self._get_context().portfolio,
+                            self._get_context().org,
                             self._get_context().entity_type,
                             self._get_context().entity_id,
                             self._get_context().thread
@@ -167,6 +169,8 @@ class AgentCore:
         try:
         
             response = self.CHC.update_turn(
+                            self._get_context().portfolio,
+                            self._get_context().org,
                             self._get_context().entity_type,
                             self._get_context().entity_id,
                             self._get_context().thread,
@@ -195,6 +199,8 @@ class AgentCore:
         #self.print_chat('Updating chat document...','text')
         
         response = self.CHC.update_workspace(
+                        self._get_context().portfolio,
+                        self._get_context().org,
                         self._get_context().entity_type,
                         self._get_context().entity_id,
                         self._get_context().thread,
@@ -391,7 +397,13 @@ class AgentCore:
         print("MUTATE_WORKSPACE>>",changes)
        
         #1. Get the workspace in this thread
-        workspaces_list = self.CHC.list_workspaces(context.entity_type,context.entity_id,context.thread) 
+        workspaces_list = self.CHC.list_workspaces(
+            context.portfolio,
+            context.org,
+            context.entity_type,
+            context.entity_id,
+            context.thread
+            ) 
         print('WORKSPACES_LIST >>',workspaces_list) 
         
         if not workspaces_list['success']:
@@ -400,11 +412,23 @@ class AgentCore:
         if len(workspaces_list['items'])==0:
             #Create a workspace as none exist
             
-            response = self.CHC.create_workspace(context.entity_type,context.entity_id,context.thread,payload) 
+            response = self.CHC.create_workspace(
+                context.portfolio,
+                context.org,
+                context.entity_type,
+                context.entity_id,
+                context.thread,payload
+                ) 
             if not response['success']:
                 return False
             # Regenerate workspaces_list
-            workspaces_list = self.CHC.list_workspaces(context.entity_type,context.entity_id,context.thread) 
+            workspaces_list = self.CHC.list_workspaces(
+                context.portfolio,
+                context.org,
+                context.entity_type,
+                context.entity_id,
+                context.thread
+                ) 
 
             print('UPDATED WORKSPACES_LIST >>>>',workspaces_list) 
             
@@ -500,7 +524,12 @@ class AgentCore:
             
             #self.print_chat('Updating the workspace document...','text')
             # Update document in DB
-            self.update_workspace_document(workspace,workspace['_id'])
+            self.update_workspace_document(
+                context.portfolio,
+                context.org,
+                workspace,
+                workspace['_id']
+                )
             
             return True
         
@@ -581,6 +610,8 @@ class AgentCore:
         message_object['messages'] = [msg_wrap]
                  
         response = self.CHC.create_turn(
+                        self._get_context().portfolio,
+                        self._get_context().org,
                         self._get_context().entity_type,
                         self._get_context().entity_id,
                         self._get_context().thread,
@@ -599,7 +630,13 @@ class AgentCore:
     
     def get_active_workspace(self):
         
-        workspaces_list = self.CHC.list_workspaces(self._get_context().entity_type,self._get_context().entity_id,self._get_context().thread) 
+        workspaces_list = self.CHC.list_workspaces(
+            self._get_context().portfolio,
+            self._get_context().org,
+            self._get_context().entity_type,
+            self._get_context().entity_id,
+            self._get_context().thread
+            ) 
         
         if not workspaces_list['success']:
             return False
