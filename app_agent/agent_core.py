@@ -356,7 +356,7 @@ class AgentCore:
             
             
         context = self._get_context()
-        if not context.connection_id:
+        if not context.connection_id or not self.apigw_client:
             return False
              
         try:
@@ -515,7 +515,7 @@ class AgentCore:
                 Data=json.dumps(doc)
             )
         '''
-         
+        
         
         try:
             print(f'Sending Real Time Message to:{context.connection_id}')
@@ -533,10 +533,7 @@ class AgentCore:
             
             return True
         
-        except self.apigw_client.exceptions.GoneException:
-            print(f'Connection is no longer available')
-            self._update_context(connection_id='')  # Clear the connection ID
-            return False
+        
         except Exception as e:
             print(f'Error sending message: {str(e)}')
             return False
