@@ -196,6 +196,7 @@ You are going to create two new files in the tower root folder called .env.devel
 ```
 cp .env.development.TEMPLATE .env.development
 cp .env.production.TEMPLATE .env.production
+cp src/tools.json.TEMPLATE src/tools.json
 ```
 
 
@@ -349,6 +350,8 @@ You can repeat this process in any computer that will be developing a TankTower 
 
 ### Step 12: Setting up AWS Credentials
 
+If you didn't go through the AWS Credential setup step in Step 11, run the following instructions
+
 
  Install awscli 
 
@@ -388,6 +391,21 @@ Ask your project admin for the config files for your project.
 `tank/env_config.py`
 `tower/.env.development.*`
 `tower/.env.production.*`
+
+
+
+### Step 14: Installing the support apps
+
+
+SCHD app
+
+You need to install the SCHD blueprints.  Run: 
+
+```
+cd tools/schd/installer
+python upload_blueprints.py <env_name> --aws-profile <profile_name> --aws-region <region>
+
+```
 
 
 

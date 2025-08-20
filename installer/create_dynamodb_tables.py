@@ -102,7 +102,15 @@ def run(env_name: str, aws_profile: str, region: str = "us-east-1") -> Dict[str,
     
     # Create standard tables
     for table in tables:
-        create_table(dynamodb, table["name"], table["partition_key"], table["sort_key"])
+        if table["name"] == f"{env_name}_chat":
+            # Create chat table with LSI for entity_index
+            chat_table_lsis = [
+                {"IndexName": "entity_index", "SortKey": "entity_index", "ProjectionType": "ALL"},
+            ]
+            create_table(dynamodb, table["name"], table["partition_key"], table["sort_key"], local_secondary_indexes=chat_table_lsis)
+        else:
+            create_table(dynamodb, table["name"], table["partition_key"], table["sort_key"])
+        
         response = dynamodb.describe_table(TableName=table["name"])
         table_arns[table["name"]] = response["Table"]["TableArn"]
 

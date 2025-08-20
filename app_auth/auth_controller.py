@@ -1342,6 +1342,8 @@ class AuthController:
 
 
         
+        
+        '''
         #5b. Create a Tool instance entity
         kwargs['name'] = 'Auth'
         kwargs['handle'] = '_auth'
@@ -1359,23 +1361,23 @@ class AuthController:
         else:
             transaction.append(response_5b)
 
-        '''
-        CHANGE ACTIONS FOR ROLES.  ROLES ARE MORE GENERAL. 
-        ROLES WILL BE DETERMINED BY THE APP DESIGNER
-        THERE WILL BE NO CUSTOM ROLES
-        EVERY API ENDPOINT WILL AUTHORIZE BASED ON WHAT ACTIONS A ROLE IS ALLOWED TO EXECUTE
-        THERE IS A ROLE-ACTION OBJECT IN THE SOURCE CODE
-        IF A ROLE NEEDS TO ACQUIRE/LOSE ACTIONS, IT WILL BE DONE VIA CODE UPDATE
-        ROLES WILL BE WELL THOUGHT TO COVER ALL ACCESS PATTERNS TO AVOID HAVING TO CREATE CUSTOM ROLES
-        CUSTOM ROLES ARE AN ANTIPATTERN. SAME AS YOU DONT CREATE CUSTOM ROLES IN BASEBALL BUT USE WHAT EXISTS 
-        IN ORDER TO CREATE A NEW ROLE YOU NEED TO HAVE DEEP UNDERSTANDING OF WHAT THE TOOL DOES. 
+        
+        #CHANGE ACTIONS FOR ROLES.  ROLES ARE MORE GENERAL. 
+        #ROLES WILL BE DETERMINED BY THE APP DESIGNER
+        #THERE WILL BE NO CUSTOM ROLES
+        #EVERY API ENDPOINT WILL AUTHORIZE BASED ON WHAT ACTIONS A ROLE IS ALLOWED TO EXECUTE
+        #THERE IS A ROLE-ACTION OBJECT IN THE SOURCE CODE
+        #IF A ROLE NEEDS TO ACQUIRE/LOSE ACTIONS, IT WILL BE DONE VIA CODE UPDATE
+        #ROLES WILL BE WELL THOUGHT TO COVER ALL ACCESS PATTERNS TO AVOID HAVING TO CREATE CUSTOM ROLES
+        #CUSTOM ROLES ARE AN ANTIPATTERN. SAME AS YOU DONT CREATE CUSTOM ROLES IN BASEBALL BUT USE WHAT EXISTS 
+        #IN ORDER TO CREATE A NEW ROLE YOU NEED TO HAVE DEEP UNDERSTANDING OF WHAT THE TOOL DOES. 
         
         
-        - A portfolio has a tool (Defined as an ENTITY owned by the portfolio)
-        - A tool has x Roles (Roles are hardcoded to the Tool)
-        - A tool+role combination is assigned to a team (Defined as a REL that links the Team with a Tool )
-        - A role has a list of actions
-        '''
+        #- A portfolio has a tool (Defined as an ENTITY owned by the portfolio)
+        #- A tool has x Roles (Roles are hardcoded to the Tool)
+        #- A tool+role combination is assigned to a team (Defined as a REL that links the Team with a Tool )
+        #- A role has a list of actions
+        
         
 
         #6. Create Team/Tool to Role Rel
@@ -1410,6 +1412,11 @@ class AuthController:
             return response_6b
         else:
             transaction.append(response_6b)
+            
+            
+            
+            
+            
             
         # We can't create the tool to Org relationship as no orgs exist yet. We'll do that in a later step.
 
@@ -1467,7 +1474,7 @@ class AuthController:
 
 
 
-
+        '''
         
         #All went good, Summarize Transaction Success 
         current_app.logger.debug('End of Funnel ')

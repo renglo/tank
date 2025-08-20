@@ -66,22 +66,57 @@ class ChatController:
         
     # THREADS
         
-    def list_threads(self,entity_type,entity_id):
+    def list_threads(self,portfolio,org,entity_type,entity_id):
         
         #TO-DO : Check is this user has access to this tool before returning threads.
-             
-        index = f"irn:chat:{entity_type}/thread:{entity_id}"
+          
+        #----   
+        #index = f"irn:chat:{entity_type}/thread:{entity_id}"
+        #++++
+        index = f"irn:chat:{portfolio}:{org}:{entity_type}:thread:*/*"
+        secondary = f"{entity_id}"
+        #>>>>
+        
+        # entity_id = ''  //This will return ALL the threads
+        # entity_id = <entity_id_prefix>  //This will return everything that matches the prefix
+        # entity_id = <entity_id_full> // This will return the exact match (one result)
+        #>>>>
+        
         limit = 10
         sort = 'desc'
         
-        response = self.CHM.list_chat(index,limit,sort=sort)
+        response = self.CHM.list_chat(index,secondary,limit,sort=sort)
+        
+        return response
+    
+    #NOT TESTED
+    def query_threads(self,portfolio,org,entity_type,query):
+        
+        #TO-DO : Check is this user has access to this tool before returning threads.  
+        
+        #----     
+        #index = f"irn:chat:{entity_type}/{query}" #NOT WORKING
+        #++++
+        index = f"irn:chat:{portfolio}:{org}:{entity_type}:thread:*/*"
+        query = f"{query}"
+        #>>>>
+        
+        limit = 99
+        sort = 'desc'
+        
+        response = self.CHM.query_chat(index,query,limit,sort=sort)
         
         return response
          
     
-    def create_thread(self,entity_type,entity_id,public_user=''):
+    def create_thread(self,portfolio,org,entity_type,entity_id,public_user=''):
         
-        index = f"irn:chat:{entity_type}/thread:{entity_id}"
+        #----
+        #index = f"irn:chat:{entity_type}/thread:{entity_id}"
+        #++++
+        index = f"irn:chat:{portfolio}:{org}:{entity_type}:thread:*/*"
+        secondary = f"{entity_id}"
+        #>>>>
         
         if public_user:
             author_id = public_user
@@ -94,6 +129,7 @@ class ChatController:
             'is_active' : True,
             'entity_id' : entity_id,
             'entity_type' : entity_type,
+            'entity_index' : secondary, 
             'language' : 'EN',
             'index' : index,
             '_id':str(uuid.uuid4()),        
@@ -103,41 +139,59 @@ class ChatController:
         
         return response
     
-    
-    
+
     
     # TURNS
     # There is a document per turn in the database
     # Every turn document contains a list of messages that belong to that turn
     
-    def list_turns(self,entity_type,entity_id,thread_id):
+    def list_turns(self,portfolio,org,entity_type,entity_id,thread_id):
               
-        index = f"irn:chat:{entity_type}/thread/turn:{entity_id}/{thread_id}"
+        #----
+        #index = f"irn:chat:{entity_type}/thread/turn:{entity_id}/{thread_id}"
+        #++++
+        index = f"irn:chat:{portfolio}:{org}:{entity_type}:thread/turn:*/*/*"
+        secondary = f"{entity_id}/{thread_id}"
+        #>>>>
+        
         limit = 50
         sort = 'asc'
         
-        response = self.CHM.list_chat(index,limit,sort=sort)
+        
+        response = self.CHM.list_chat(index,secondary,limit,sort=sort)
         
         return response
     
     
-    def get_turn(self, entity_type, entity_id, thread_id, turn_id):
+    def get_turn(self,portfolio,org,entity_type, entity_id, thread_id, turn_id):
         
-        index = f"irn:chat:{entity_type}/thread/turn:{entity_id}/{thread_id}" 
-        print(f'get_turn > {index} > {turn_id}') 
-        response = self.CHM.get_chat(index,turn_id) 
+        #----
+        #index = f"irn:chat:{entity_type}/thread/turn:{entity_id}/{thread_id}" 
+        #++++
+        index = f"irn:chat:{portfolio}:{org}:{entity_type}:thread/turn:*/*/*"
+        secondary = f"{entity_id}/{thread_id}"
+        #>>>>
+        
+        
+        print(f'get_turn > {index}/{secondary}/{turn_id}') 
+        response = self.CHM.get_chat(index,secondary,turn_id) 
         return response
     
     
-    def create_turn(self, entity_type, entity_id, thread_id, payload):
+    def create_turn(self,portfolio,org,entity_type, entity_id, thread_id, payload):
         print('CHC:create_turn')
         try:
             if not all([entity_type, entity_id, thread_id, payload]):
                 raise ValueError("Missing required parameters")
 
-            index = f"irn:chat:{entity_type}/thread/turn:{entity_id}/{thread_id}"
+            #-----
+            #index = f"irn:chat:{entity_type}/thread/turn:{entity_id}/{thread_id}"
+            #++++
+            index = f"irn:chat:{portfolio}:{org}:{entity_type}:thread/turn:*/*/*"
+            secondary = f"{entity_id}/{thread_id}"
+            #>>>>
             
-            current_app.logger.debug(f'create_turn > input > {index}')
+            current_app.logger.debug(f'create_turn > input > {index}/{secondary}')
             current_app.logger.debug(f'payload: {payload}')
             
             # Validate required payload fields
@@ -164,6 +218,7 @@ class ChatController:
                 'context': payload['context'],
                 'messages': messages,
                 'index': index,
+                'entity_index': secondary,
                 '_id': str(uuid.uuid4()) # This is the turn ID 
             }
             
@@ -196,10 +251,10 @@ class ChatController:
     
             
     
-    def update_turn(self,entity_type, entity_id, thread_id, turn_id, update, call_id=False):
+    def update_turn(self,portfolio,org,entity_type, entity_id, thread_id, turn_id, update, call_id=False):
         print(f'CHC:update_turn {entity_type}/{thread_id}/{turn_id}:{update}::{call_id}')
         try:
-            data = self.get_turn(entity_type, entity_id, thread_id, turn_id)
+            data = self.get_turn(portfolio,org,entity_type, entity_id, thread_id, turn_id)
             
             if not data['success']:
                 return data
@@ -275,33 +330,49 @@ class ChatController:
         
     # WORKSPACE
     
-    def list_workspaces(self,entity_type,entity_id,thread_id):
+    def list_workspaces(self,portfolio,org,entity_type,entity_id,thread_id):
               
-        index = f"irn:chat:{entity_type}/thread/workspace:{entity_id}/{thread_id}"
+        #-----
+        #index = f"irn:chat:{entity_type}/thread/workspace:{entity_id}/{thread_id}"
+        #++++
+        index = f"irn:chat:{portfolio}:{org}:{entity_type}:thread/workspace:*/*/*"
+        secondary = f"{entity_id}/{thread_id}"
+        #>>>>
         limit = 50
         sort = 'asc'
         
-        response = self.CHM.list_chat(index,limit,sort=sort)
+        response = self.CHM.list_chat(index,secondary,limit,sort=sort)
         
         return response
     
     
-    def get_workspace(self, entity_type, entity_id, thread_id, workspace_id):
+    def get_workspace(self,portfolio,org,entity_type,entity_id,thread_id,workspace_id):
         
-        index = f"irn:chat:{entity_type}/thread/workspace:{entity_id}/{thread_id}" 
-        print(f'get_workspace > {index} > {workspace_id}') 
-        response = self.CHM.get_chat(index,workspace_id) 
+        #----
+        #index = f"irn:chat:{entity_type}/thread/workspace:{entity_id}/{thread_id}"
+        #++++
+        index = f"irn:chat:{portfolio}:{org}:{entity_type}:thread/workspace:*/*/*"
+        secondary = f"{entity_id}/{thread_id}"
+        #>>>>
+        
+        print(f'get_workspace > {index}/{secondary}/{workspace_id}') 
+        response = self.CHM.get_chat(index,secondary,workspace_id) 
         return response
     
     
-    def create_workspace(self, entity_type, entity_id, thread_id, payload):
+    def create_workspace(self,portfolio,org,entity_type,entity_id,thread_id,payload):
         print('CHC:create_workspace')
         try:
             
             if not all([entity_type, entity_id, thread_id]):
                 raise ValueError("Missing required parameters")
 
-            index = f"irn:chat:{entity_type}/thread/workspace:{entity_id}/{thread_id}"
+            #----
+            #index = f"irn:chat:{entity_type}/thread/workspace:{entity_id}/{thread_id}"
+            #++++
+            index = f"irn:chat:{portfolio}:{org}:{entity_type}:thread/workspace:*/*/*"
+            secondary = f"{entity_id}/{thread_id}"
+            #>>>>
             
             current_app.logger.debug(f'create_workspace > input > {index}')
             current_app.logger.debug(f'payload: {payload}')
@@ -357,6 +428,7 @@ class ChatController:
                 'config' : config,
                 'cache':cache,
                 'index': index,
+                'entity_index':secondary,
                 '_id': str(uuid.uuid4())
             }
             
@@ -374,12 +446,12 @@ class ChatController:
             }
         
         
-    def update_workspace(self,entity_type, entity_id, thread_id, workspace_id, payload):
+    def update_workspace(self,portfolio,org,entity_type,entity_id,thread_id,workspace_id,payload):
         print(f'CHC:update_workspace {entity_type}/{thread_id}/{workspace_id}:{payload}')
         
         try:
         
-            response_0 = self.get_workspace(entity_type, entity_id, thread_id, workspace_id)
+            response_0 = self.get_workspace(portfolio,org,entity_type, entity_id, thread_id, workspace_id)
             
             print('Updating the obtained workspace document...')
             
@@ -417,6 +489,10 @@ class ChatController:
                 "message": f"Error updating workspace: {str(e)}",
                 "status": 500
             }
+            
+            
+    
+    
                 
             
     

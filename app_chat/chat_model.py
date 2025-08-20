@@ -35,8 +35,10 @@ class ChatModel:
             return obj
         else:
             return obj
-
-    def list_chat(self,index,limit=50,lastkey=None,sort='asc'):
+        
+        
+    
+    def query_chat(self,index,entity_index_prefix,limit=50,lastkey=None,sort='asc'):
         
         result = {}
         all_items = []
@@ -44,12 +46,26 @@ class ChatModel:
         try:
             while True:
                 # Build the query parameters with KeyConditionExpression
-                query_params = {
-                    'TableName': DYNAMODB_CHAT_TABLE,
-                    'KeyConditionExpression': Key('index').eq(index),
-                    'Limit': limit,
-                    "ScanIndexForward": True if sort == 'asc' else False
-                }
+
+                if entity_index_prefix:
+                    query_params = {
+                        'TableName': DYNAMODB_CHAT_TABLE,
+                        'IndexName': 'entity_index',  # Use the LSI
+                        'KeyConditionExpression': Key('index').eq(index) & Key('entity_index').begins_with(entity_index_prefix),
+                        'Limit': limit,
+                        "ScanIndexForward": True if sort == 'asc' else False
+                    }
+                else:
+                    # Handle case when no prefix is provided
+                    query_params = {
+                        'TableName': DYNAMODB_CHAT_TABLE,
+                        'IndexName': 'entity_index',
+                        'KeyConditionExpression': Key('index').eq(index),  # Only query by index
+                        'Limit': limit,
+                        "ScanIndexForward": True if sort == 'asc' else False
+                    }
+                
+       
 
                 # Add the ExclusiveStartKey to the query parameters if provided (for pagination)
                 if lastkey:
@@ -79,12 +95,65 @@ class ChatModel:
             
             result['success'] = False
             result['message'] = 'Items could not be retrieved'
+            result['items'] = all_items
+            result['error'] = str(e)
+            status = 400
+            return result
+        
+        
+
+    def list_chat(self,index,entity_index,limit=50,lastkey=None,sort='asc'):
+        
+        result = {}
+        all_items = []
+
+        try:
+            while True:
+                # Build the query parameters with KeyConditionExpression using LSI
+                query_params = {
+                    'TableName': DYNAMODB_CHAT_TABLE,
+                    'IndexName': 'entity_index',  # Use the LSI
+                    'KeyConditionExpression': Key('index').eq(index) & Key('entity_index').eq(entity_index),
+                    'Limit': limit,
+                    "ScanIndexForward": True if sort == 'asc' else False
+                }
+                           
+
+                # Add the ExclusiveStartKey to the query parameters if provided (for pagination)
+                if lastkey:
+                    query_params['ExclusiveStartKey'] = lastkey
+
+                # Query DynamoDB to get items with matching PK and SK prefix
+                response = self.chat_table.query(**query_params)
+                
+                # Extract items and pagination key
+                items = response.get('Items', [])
+                all_items.extend(items)  # Add current page items to the complete list
+                
+                # Get the pagination key for next query
+                lastkey = response.get('LastEvaluatedKey')
+                
+                # If there's no more pages, break the loop
+                if not lastkey:
+                    break
+
+            # Build the result with all items
+            result['success'] = True
+            result['items'] = all_items
+            
+            return result
+
+        except (BotoCoreError, ClientError) as e:
+            
+            result['success'] = False
+            result['message'] = 'Items could not be retrieved'
+            result['items'] = all_items
             result['error'] = str(e)
             status = 400
             return result
         
     
-    def get_chat(self, index, message_id):
+    def get_chat(self,index,entity_index,message_id):
         
         result = {}
         
@@ -96,7 +165,8 @@ class ChatModel:
             
             query_params = {
                 'TableName': DYNAMODB_CHAT_TABLE,
-                'KeyConditionExpression': Key('index').eq(index),
+                'IndexName': 'entity_index',  # Use the LSI
+                'KeyConditionExpression': Key('index').eq(index) & Key('entity_index').eq(entity_index),
                 'FilterExpression': Attr('_id').eq(message_id)
             }
             

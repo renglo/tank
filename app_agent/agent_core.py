@@ -21,6 +21,17 @@ import uuid
 
 from env_config import OPENAI_API_KEY,WEBSOCKET_CONNECTIONS
 
+# Optional imports with default values
+try:
+    from env_config import AGENT_API_OUTPUT
+except ImportError:
+    AGENT_API_OUTPUT = None
+
+try:
+    from env_config import AGENT_API_HANDLER
+except ImportError:
+    AGENT_API_HANDLER = None
+
 @dataclass
 class RequestContext:
     """Request-scoped context for agent operations."""
@@ -118,6 +129,8 @@ class AgentCore:
             print(f'thread :{self._get_context().thread}')
         
             response = self.CHC.list_turns(
+                            self._get_context().portfolio,
+                            self._get_context().org,
                             self._get_context().entity_type,
                             self._get_context().entity_id,
                             self._get_context().thread
@@ -156,6 +169,8 @@ class AgentCore:
         try:
         
             response = self.CHC.update_turn(
+                            self._get_context().portfolio,
+                            self._get_context().org,
                             self._get_context().entity_type,
                             self._get_context().entity_id,
                             self._get_context().thread,
@@ -184,6 +199,8 @@ class AgentCore:
         #self.print_chat('Updating chat document...','text')
         
         response = self.CHC.update_workspace(
+                        self._get_context().portfolio,
+                        self._get_context().org,
                         self._get_context().entity_type,
                         self._get_context().entity_id,
                         self._get_context().thread,
@@ -245,6 +262,8 @@ class AgentCore:
             self.update_chat_message_context(doc)
             # Print to live chat
             self.print_chat(output,message_type)
+            # Print to API
+            self.print_api(output['content'],message_type)
             
         elif 'tool_call_id' in output and 'role' in output and output['role']=='tool':
             # This is a response from the tool
@@ -267,6 +286,65 @@ class AgentCore:
         if as_is:
             doc = output             
         elif isinstance(output, dict) and 'role' in output and 'content' in output and output['role'] and output['content']: 
+                
+            if 'display_directly' in output['content']:  
+                self.print_chat(output,message_type)
+                           
+
+        # Append new message to runtime context
+        if message_type in ['user','system','text','tool_rq','tool_rs']:
+            current_history = self._get_context().message_history
+            current_history.append(doc['_out'])
+            self._update_context(message_history=current_history)
+     
+          
+    
+    def print_api(self,message,type='text'):
+        
+        action = 'print_api'
+         
+        try:
+            if AGENT_API_OUTPUT and AGENT_API_HANDLER:
+                
+                context = self._get_context()
+                if context.public_user:
+                    target = context.public_user
+                else:
+                    return {'success':False,'action':action,'input':message,'output':'This is an internal call, no API output is needed'}
+               
+                
+                params = {'message':message,'type':type,'target':target}  
+                
+                parts = AGENT_API_HANDLER.split('/')
+                if len(parts) != 2:
+                    error_msg = f"{AGENT_API_HANDLER} is not a valid tool."
+                    print(error_msg)
+                    self.print_chat(error_msg, 'text')
+                    raise ValueError(error_msg)
+                
+                portfolio = self._get_context().portfolio
+                org = self._get_context().org
+                
+                print(f'Calling {AGENT_API_HANDLER} ') 
+                response = self.SHC.handler_call(portfolio,org,parts[0],parts[1],params)
+                
+                return response
+            else:
+                return {'success':False,'action':action,'input':message,'output':'AGENT_API_OUTPUT or AGENT_API_HANDLER not configured'}
+                
+        except ValueError as ve:
+            print(f"ValueError in {action}: {ve}")
+            return {'success':False,'action':action,'input':message,'output':str(ve)}
+        except Exception as e:
+            print(f"Error in {action}: {e}")
+            return {'success':False,'action':action,'input':message,'output':str(e)}
+        
+ 
+        
+
+    def print_chat(self,output,type='text'):
+        
+        if isinstance(output, dict) and 'role' in output and 'content' in output and output['role'] and output['content']: 
             # Content responses from LLM  
             doc = {'_out':{'role':output['role'],'content':self.sanitize(output['content'])},'_type':type}      
         elif isinstance(output, str):
@@ -319,7 +397,13 @@ class AgentCore:
         print("MUTATE_WORKSPACE>>",changes)
        
         #1. Get the workspace in this thread
-        workspaces_list = self.CHC.list_workspaces(context.entity_type,context.entity_id,context.thread) 
+        workspaces_list = self.CHC.list_workspaces(
+            context.portfolio,
+            context.org,
+            context.entity_type,
+            context.entity_id,
+            context.thread
+            ) 
         print('WORKSPACES_LIST >>',workspaces_list) 
         
         if not workspaces_list['success']:
@@ -328,11 +412,23 @@ class AgentCore:
         if len(workspaces_list['items'])==0:
             #Create a workspace as none exist
             
-            response = self.CHC.create_workspace(context.entity_type,context.entity_id,context.thread,payload) 
+            response = self.CHC.create_workspace(
+                context.portfolio,
+                context.org,
+                context.entity_type,
+                context.entity_id,
+                context.thread,payload
+                ) 
             if not response['success']:
                 return False
             # Regenerate workspaces_list
-            workspaces_list = self.CHC.list_workspaces(context.entity_type,context.entity_id,context.thread) 
+            workspaces_list = self.CHC.list_workspaces(
+                context.portfolio,
+                context.org,
+                context.entity_type,
+                context.entity_id,
+                context.thread
+                ) 
 
             print('UPDATED WORKSPACES_LIST >>>>',workspaces_list) 
             
@@ -428,7 +524,12 @@ class AgentCore:
             
             #self.print_chat('Updating the workspace document...','text')
             # Update document in DB
-            self.update_workspace_document(workspace,workspace['_id'])
+            self.update_workspace_document(
+                context.portfolio,
+                context.org,
+                workspace,
+                workspace['_id']
+                )
             
             return True
         
@@ -509,6 +610,8 @@ class AgentCore:
         message_object['messages'] = [msg_wrap]
                  
         response = self.CHC.create_turn(
+                        self._get_context().portfolio,
+                        self._get_context().org,
                         self._get_context().entity_type,
                         self._get_context().entity_id,
                         self._get_context().thread,
@@ -527,7 +630,13 @@ class AgentCore:
     
     def get_active_workspace(self):
         
-        workspaces_list = self.CHC.list_workspaces(self._get_context().entity_type,self._get_context().entity_id,self._get_context().thread) 
+        workspaces_list = self.CHC.list_workspaces(
+            self._get_context().portfolio,
+            self._get_context().org,
+            self._get_context().entity_type,
+            self._get_context().entity_id,
+            self._get_context().thread
+            ) 
         
         if not workspaces_list['success']:
             return False
