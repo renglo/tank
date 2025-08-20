@@ -77,9 +77,12 @@ if app.config['IS_LAMBDA']:
     CORS(
     app,
     resources={r"*": {"origins": origins}},
-    supports_credentials=False,  # set True only if using cookies
-    allow_headers=["Authorization", "Content-Type"],
-    methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    supports_credentials=False,
+    methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    # This makes Flask-CORS echo the browser's requested headers
+    expose_headers=["*"],
+    # This allows any headers the browser requests
+    allow_headers="*"
     )
 else:
     app.logger.info('RUNNING ON LOCAL ENVIRONMENT')  
@@ -97,6 +100,7 @@ app.register_blueprint(app_auth)
 app.register_blueprint(app_docs)
 app.register_blueprint(app_schd)
 app.register_blueprint(app_chat)
+
 
 
 #Template Filters
