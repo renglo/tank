@@ -110,7 +110,7 @@ flask run
 ```
 
 
-Open the config files and esourcenter the tokens, secrets and IDs that belong to the environment you are deploying to. 
+Open the config files and enter the tokens, secrets and IDs that belong to the environment you are deploying to. 
 Many of those settings will be available to you until you set the cloud (Step 10). 
 
 
