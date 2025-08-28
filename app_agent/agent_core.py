@@ -192,7 +192,7 @@ class AgentCore:
 
 
 
-    def update_workspace_document(self,update,workspace_id):
+    def update_workspace_document(self,portfolio,org,update,workspace_id):
         
         action = 'update_workspace_document'
         print(f'Running: {action}')
@@ -279,23 +279,6 @@ class AgentCore:
             if interface:  
                 self.print_chat(doc,message_type,True)
                            
-
-
-    def print_chat(self,output,type='text',as_is=False):
-        
-        if as_is:
-            doc = output             
-        elif isinstance(output, dict) and 'role' in output and 'content' in output and output['role'] and output['content']: 
-                
-            if 'display_directly' in output['content']:  
-                self.print_chat(output,message_type)
-                           
-
-        # Append new message to runtime context
-        if message_type in ['user','system','text','tool_rq','tool_rs']:
-            current_history = self._get_context().message_history
-            current_history.append(doc['_out'])
-            self._update_context(message_history=current_history)
      
           
     
@@ -344,6 +327,8 @@ class AgentCore:
 
     def print_chat(self,output,type='text'):
         
+        print(f'Running: Print Chat:{output}')
+        
         if isinstance(output, dict) and 'role' in output and 'content' in output and output['role'] and output['content']: 
             # Content responses from LLM  
             doc = {'_out':{'role':output['role'],'content':self.sanitize(output['content'])},'_type':type}      
@@ -357,6 +342,7 @@ class AgentCore:
             
         context = self._get_context()
         if not context.connection_id or not self.apigw_client:
+            print(f'WebSocket not configured or this is a RESTful post to the chat.')
             return False
              
         try:
@@ -1255,12 +1241,16 @@ class AgentCore:
             # We get the message history directly from the source of truth to avoid missing tool id calls. 
             message_list = self.get_message_history()
             
+            print(f'Raw Message History: {message_list}')
+            
             # Go through the message_list and replace the value of the 'content' attribute with an empty object when the role is 'tool'
             # Unless the last message it a tool response which the interpret function needs to process. 
             # The reason is that we don't want to overwhelm the LLM with the contents of the history of tool outputs. 
             
             # Clear content from all tool messages except the last one
             message_list = self.clear_tool_message_content(message_list['output'])
+            
+            print(f'Cleared Message History: {message_list}')
             
             
             # Get current time and date
