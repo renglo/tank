@@ -128,6 +128,12 @@ class AgentCore:
             print(f'entity_id :{self._get_context().entity_id}')
             print(f'thread :{self._get_context().thread}')
         
+            # Thead was not included, create a new one?
+            if not self._get_context().thread:
+                return {'success':False,'action':action,'output':f'Error: No thread provided'}
+                
+                
+        
             response = self.CHC.list_turns(
                             self._get_context().portfolio,
                             self._get_context().org,
@@ -1742,6 +1748,8 @@ class AgentCore:
         
         if 'thread' in payload:
             context.thread = payload['thread']
+        else:
+            return {'success':False,'action':action,'input':payload,'output':'No thread provided'}
             
         if 'workspace' in payload:
             context.workspace_id = payload['workspace']
