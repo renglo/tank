@@ -2,6 +2,7 @@
 zappa_settings.json
 env_config.py
 flask-zappa-app-*
+api_gateway_policy.json
 
 
 # Byte-compiled / optimized / DLL files

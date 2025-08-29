@@ -331,11 +331,13 @@ class AgentCore:
  
         
 
-    def print_chat(self,output,type='text'):
+    def print_chat(self,output,type='text',as_is=False):
         
         print(f'Running: Print Chat:{output}')
         
-        if isinstance(output, dict) and 'role' in output and 'content' in output and output['role'] and output['content']: 
+        if as_is:
+            doc = output  
+        elif isinstance(output, dict) and 'role' in output and 'content' in output and output['role'] and output['content']: 
             # Content responses from LLM  
             doc = {'_out':{'role':output['role'],'content':self.sanitize(output['content'])},'_type':type}      
         elif isinstance(output, str):
@@ -510,7 +512,7 @@ class AgentCore:
         
         
         try:
-            print(f'Sending Real Time Message to:{context.connection_id}')
+            #print(f'Sending Real Time Message to:{context.connection_id}')
             #doc = {'_out':workspace,'_type':'json'}
             #self.print_chat(doc,'json')
             
@@ -1056,7 +1058,6 @@ class AgentCore:
             # Clean and prepare belief history if provided
             cleaned_belief_history = self.sanitize(belief_history) if belief_history else []
             pruned_belief_history = self.prune_history(cleaned_belief_history) if cleaned_belief_history else []
-            
             prompt_text = f"""
             You are a comprehensive message processing module for a BDI agent. Your task is to process a user message through multiple stages in a single pass.
 
@@ -1180,15 +1181,11 @@ class AgentCore:
             9. Only change the current action when explicitly requested or necessary
             10. Use new information to fill missing slots in the current action
             """
-            
-            
-            
             prompt = {
                 "model": self.AI_1_MODEL,
                 "messages": [{ "role": "user", "content": prompt_text}],
                 "temperature":0
             }
-        
             response = self.llm(prompt)
             
             if not response.content:

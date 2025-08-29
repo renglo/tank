@@ -239,6 +239,12 @@ def chat_one_workspace(portfolio,org,entity_type,entity_id,thread_id,workspace_i
     return response
 
 
+@app_chat.route('<string:x>/<string:y>', methods=['GET'])
+def dead_end(): 
+    print('Dead End')
+    return '',200
+
+
 
 # TROUBLESHOOT (Please comment out)
 @app_chat.route('/tb', methods=['POST'])

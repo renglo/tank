@@ -48,18 +48,18 @@ class ChatModel:
                 # Build the query parameters with KeyConditionExpression
 
                 if entity_index_prefix:
+
                     query_params = {
                         'TableName': DYNAMODB_CHAT_TABLE,
-                        'IndexName': 'entity_index',  # Use the LSI
                         'KeyConditionExpression': Key('index').eq(index) & Key('entity_index').begins_with(entity_index_prefix),
                         'Limit': limit,
                         "ScanIndexForward": True if sort == 'asc' else False
                     }
+                                     
                 else:
                     # Handle case when no prefix is provided
                     query_params = {
                         'TableName': DYNAMODB_CHAT_TABLE,
-                        'IndexName': 'entity_index',
                         'KeyConditionExpression': Key('index').eq(index),  # Only query by index
                         'Limit': limit,
                         "ScanIndexForward": True if sort == 'asc' else False
@@ -71,8 +71,9 @@ class ChatModel:
                 if lastkey:
                     query_params['ExclusiveStartKey'] = lastkey
 
-                # Query DynamoDB to get items with matching PK and SK prefix
+                
                 response = self.chat_table.query(**query_params)
+                
                 
                 # Extract items and pagination key
                 items = response.get('Items', [])
@@ -112,7 +113,6 @@ class ChatModel:
                 # Build the query parameters with KeyConditionExpression using LSI
                 query_params = {
                     'TableName': DYNAMODB_CHAT_TABLE,
-                    'IndexName': 'entity_index',  # Use the LSI
                     'KeyConditionExpression': Key('index').eq(index) & Key('entity_index').eq(entity_index),
                     'Limit': limit,
                     "ScanIndexForward": True if sort == 'asc' else False
@@ -165,7 +165,6 @@ class ChatModel:
             
             query_params = {
                 'TableName': DYNAMODB_CHAT_TABLE,
-                'IndexName': 'entity_index',  # Use the LSI
                 'KeyConditionExpression': Key('index').eq(index) & Key('entity_index').eq(entity_index),
                 'FilterExpression': Attr('_id').eq(message_id)
             }
