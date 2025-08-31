@@ -1573,6 +1573,7 @@ class AgentCore:
             clean_output_str = json.dumps(clean_output, cls=DecimalEncoder)
             
             interface = None
+            # The handler determines the interface
             if 'interface' in response['output']['output']['output'][-1]:
                 interface = response['output']['output']['output'][-1]['interface']
 

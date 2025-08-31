@@ -148,11 +148,11 @@ class ChatController:
         limit = 50
         sort = 'asc'
         
-        print(f'List Turns params >> {index} , {query}')
+        #print(f'List Turns params >> {index} , {query}')
         #response = self.CHM.list_chat(index,secondary,limit,sort=sort)
         response = self.CHM.query_chat(index,query,limit,sort=sort)
         
-        print(f'List Turns>> {response}')
+        #print(f'List Turns>> {response}')
         
         return response
     
