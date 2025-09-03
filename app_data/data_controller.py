@@ -23,6 +23,146 @@ class DecimalEncoder(json.JSONEncoder):
         return super(DecimalEncoder, self).default(obj)
 
 
+def convert_js_to_json(js_string):
+    """
+    Convert JavaScript object syntax to proper JSON format.
+    Handles unquoted property names and single quotes.
+    """
+    if not isinstance(js_string, str):
+        return js_string
+    
+    print(f"Converting JS to JSON - Input: {js_string}")
+    
+    # Replace single quotes with double quotes
+    js_string = js_string.replace("'", '"')
+    
+    # More robust regex to handle nested objects and arrays
+    # This pattern matches property names that aren't already quoted
+    # and handles various whitespace scenarios
+    import re
+    
+    # First, let's handle the most common case: simple property names
+    # This regex looks for word characters that are followed by a colon
+    # but not preceded by a quote
+    pattern = r'([{,])\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:'
+    replacement = r'\1"\2":'
+    js_string = re.sub(pattern, replacement, js_string)
+    
+    # Handle property names at the start of the string (for root objects)
+    pattern = r'^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:'
+    replacement = r'"\1":'
+    js_string = re.sub(pattern, replacement, js_string)
+    
+    print(f"Converting JS to JSON - Output: {js_string}")
+    
+    return js_string
+
+
+def convert_js_to_json_advanced(js_string):
+    """
+    More advanced JavaScript to JSON converter that handles complex cases.
+    """
+    if not isinstance(js_string, str):
+        return js_string
+    
+    print(f"Advanced JS to JSON - Input: {js_string}")
+    
+    # Replace single quotes with double quotes
+    js_string = js_string.replace("'", '"')
+    
+    import re
+    
+    # Handle property names in various contexts
+    # This is a more comprehensive approach
+    
+    # Step 1: Handle property names after opening braces and commas
+    js_string = re.sub(r'([{,])\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:', r'\1"\2":', js_string)
+    
+    # Step 2: Handle property names at the very beginning (for root objects)
+    js_string = re.sub(r'^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:', r'"\1":', js_string)
+    
+    # Step 3: Handle property names after array elements
+    js_string = re.sub(r'([\]}])\s*,\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:', r'\1,"\2":', js_string)
+    
+    print(f"Advanced JS to JSON - Output: {js_string}")
+    
+    return js_string
+
+
+def convert_js_to_json_robust(js_string):
+    """
+    Robust JavaScript to JSON converter that handles whitespace, newlines, and formatting issues.
+    """
+    if not isinstance(js_string, str):
+        return js_string
+    
+    print(f"Robust JS to JSON - Input: {js_string}")
+    
+    # Replace single quotes with double quotes
+    js_string = js_string.replace("'", '"')
+    
+    import re
+    
+    # Step 1: Handle property names in various contexts
+    js_string = re.sub(r'([{,])\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:', r'\1"\2":', js_string)
+    js_string = re.sub(r'^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:', r'"\1":', js_string)
+    js_string = re.sub(r'([\]}])\s*,\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:', r'\1,"\2":', js_string)
+    
+    # Step 2: Clean up whitespace and formatting
+    # Remove trailing commas before closing braces/brackets
+    js_string = re.sub(r',(\s*[}\]])', r'\1', js_string)
+    
+    # Clean up excessive whitespace and newlines, but preserve time formats
+    js_string = re.sub(r'\s+', ' ', js_string)
+    
+    # Clean up commas and colons, but be careful with time strings
+    # Don't add spaces around colons in time strings (HH:MM:SS or HH:MM)
+    js_string = re.sub(r'\s*,\s*', ', ', js_string)
+    
+    # Only add spaces around colons that are property separators, not time separators
+    # This regex looks for colons that are followed by a space or closing brace/bracket
+    js_string = re.sub(r'\s*:\s*(?=[^"]*["\d])', ': ', js_string)
+    
+    # Step 3: Ensure proper array/object formatting
+    js_string = re.sub(r'\[\s*{', '[{', js_string)
+    js_string = re.sub(r'}\s*\]', '}]', js_string)
+    js_string = re.sub(r'}\s*,', '},', js_string)
+    
+    print(f"Robust JS to JSON - Output: {js_string}")
+    
+    return js_string
+
+
+def convert_js_to_json_simple(js_string):
+    """
+    Simple and reliable JavaScript to JSON converter.
+    """
+    if not isinstance(js_string, str):
+        return js_string
+    
+    print(f"Simple JS to JSON - Input: {js_string}")
+    
+    # Replace single quotes with double quotes
+    js_string = js_string.replace("'", '"')
+    
+    import re
+    
+    # Step 1: Handle property names - only target property names, not values
+    # Look for word characters followed by colon that are not inside quotes
+    js_string = re.sub(r'([{,])\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:', r'\1"\2":', js_string)
+    js_string = re.sub(r'^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:', r'"\1":', js_string)
+    
+    # Step 2: Remove trailing commas
+    js_string = re.sub(r',(\s*[}\]])', r'\1', js_string)
+    
+    # Step 3: Clean up excessive whitespace but preserve formatting
+    js_string = re.sub(r'\s+', ' ', js_string)
+    
+    print(f"Simple JS to JSON - Output: {js_string}")
+    
+    return js_string
+
+
 class DataController:
 
     def __init__(self,tid=None,ip=None):
@@ -407,16 +547,14 @@ class DataController:
         #current_app.logger.debug('Item from DB:'+str(updated_item))
 
         #2. Pull the Blueprint listed in that document
-
-        
+  
         version = 'last'
 
         blueprint = self.BPC.get_blueprint('irma',ring,version)
         fields = blueprint['fields']
 
         #3. Convert incoming request payload to JSON
-
-        
+   
         #current_app.logger.debug('CPI Payload:'+str(payload))
         #print(f"CPI TYPE:{type(payload).__name__}")
         #current_app.logger.debug(blueprint['fields']) 
@@ -433,7 +571,7 @@ class DataController:
 
                
                 if field['type'] == 'object':
-                    #print('CPI > Blueprint : Type : object ')
+                    print('CPI > Blueprint : Type : object ')
                     
                     # Check if new_raw is already a dict
                     if isinstance(new_raw, dict):
@@ -451,7 +589,7 @@ class DataController:
                             putNeeded = True
                 
                 elif field['type'] == 'array':
-                    #print('CPI > Blueprint : Type : array ')
+                    print('CPI > Blueprint : Type : array ')
                     
                     # Check if new_raw is already a list
                     if isinstance(new_raw, list):
@@ -463,6 +601,47 @@ class DataController:
                             #print('CPI > Blueprint : Type : array > Load json ')
                             updated_item['attributes'][field['name']] = json.loads(new_raw.strip())  
                             putNeeded = True
+                        except json.JSONDecodeError as e:
+                            print('CPI > Blueprint : Type : array > Load json > JSONDecodeError > Try converting JS syntax')
+                            print(f'CPI > Blueprint : Type : array > Error details: {str(e)}')
+                            # Try converting JavaScript syntax to JSON
+                            try:
+                                converted_json = convert_js_to_json(new_raw.strip())
+                                updated_item['attributes'][field['name']] = json.loads(converted_json)
+                                putNeeded = True
+                                print('CPI > Blueprint : Type : array > Successfully converted JS syntax to JSON')
+                            except Exception as conversion_error:
+                                print('CPI > Blueprint : Type : array > JS conversion failed, trying advanced converter')
+                                print(f'CPI > Blueprint : Type : array > Conversion error: {str(conversion_error)}')
+                                # Try the advanced converter
+                                try:
+                                    converted_json = convert_js_to_json_advanced(new_raw.strip())
+                                    updated_item['attributes'][field['name']] = json.loads(converted_json)
+                                    putNeeded = True
+                                    print('CPI > Blueprint : Type : array > Successfully converted JS syntax to JSON (advanced)')
+                                except Exception as advanced_error:
+                                    print('CPI > Blueprint : Type : array > Advanced conversion failed, trying robust converter')
+                                    print(f'CPI > Blueprint : Type : array > Advanced error: {str(advanced_error)}')
+                                    # Try the robust converter
+                                    try:
+                                        converted_json = convert_js_to_json_robust(new_raw.strip())
+                                        updated_item['attributes'][field['name']] = json.loads(converted_json)
+                                        putNeeded = True
+                                        print('CPI > Blueprint : Type : array > Successfully converted JS syntax to JSON (robust)')
+                                    except Exception as robust_error:
+                                        print('CPI > Blueprint : Type : array > Robust conversion failed, trying simple converter')
+                                        print(f'CPI > Blueprint : Type : array > Robust error: {str(robust_error)}')
+                                        # Try the simple converter
+                                        try:
+                                            converted_json = convert_js_to_json_simple(new_raw.strip())
+                                            updated_item['attributes'][field['name']] = json.loads(converted_json)
+                                            putNeeded = True
+                                            print('CPI > Blueprint : Type : array > Successfully converted JS syntax to JSON (simple)')
+                                        except Exception as simple_error:
+                                            print('CPI > Blueprint : Type : array > Simple conversion failed, falling back to string')
+                                            print(f'CPI > Blueprint : Type : array > Simple error: {str(simple_error)}')
+                                            updated_item['attributes'][field['name']] = str(new_raw).strip()
+                                            putNeeded = True
                         except Exception as e:
                             print('CPI > Blueprint : Type : array > Load json > Except > Load String ')
                             print(f'CPI > Blueprint : Type : array > Error details: {str(e)}')
