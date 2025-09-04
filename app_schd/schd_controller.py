@@ -241,10 +241,11 @@ class SchdController:
         print(f'Calling handler:{handler}, payload:{payload}')
         
         try:        
-            #Augmenting the payload with portfolio, org and tool information
+            # We override portfolio, org and tool that might come in the payload.
             payload['portfolio'] = portfolio
             payload['org'] = org
             payload['tool'] = tool
+
                 
             response = {'success':False,'output':[]}
             
