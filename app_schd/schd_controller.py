@@ -253,8 +253,9 @@ class SchdController:
             
             if not response['success']:
                 return {'success':False,'action':action,'handler':handler,'input':payload,'output':response}
-                  
-            return {'success':True,'action':action,'handler':handler,'input':payload,'output':response}
+                      
+            canonical = response['output']['output']
+            return {'success':True,'action':action,'handler':handler,'input':payload,'output':canonical,'stack':response}
         
         except Exception as e:
             print(f'Error @handler_call: {str(e)}')

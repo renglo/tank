@@ -148,7 +148,7 @@ class SchdLoader:
         try:
      
             class_name = self.convert_module_name_to_class(module_name)
-            current_app.logger.info(f'Attempting to load class:{class_name}')
+            print(f'Attempting to load class:{class_name}')
             
             # Use os.path.normpath to handle different path separators
             normalized_module_name = os.path.normpath(module_name)
@@ -163,13 +163,13 @@ class SchdLoader:
                 error = f"Class '{class_name}' in '{module_name}' could not be loaded."
                 return {'success':False,'action':action,'error':error,'output':error,'status':500}
             
-            current_app.logger.info(f'Class Loaded:{class_name}')
+            print(f'Class Loaded:{class_name}')
             
             if hasattr(instance, "run"):       
                 result = instance.run(payload)  # Pass payload to run
             else:
                 error = f"Class '{class_name}' in '{module_name}' has no 'run' method."
-                current_app.logger.error(error)
+                print(error)
                 return {'success':False,'action':action,'error':error,'status':500}
 
 

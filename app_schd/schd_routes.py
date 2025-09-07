@@ -283,7 +283,10 @@ def webhook_call(portfolio,org,tool,handler):
     if not response['success']:
         print('WEBHOOK TRACE (400):', response)
     else:
-        print('WEBHOOK TRACE (200):',response)
+        if 'status' in response:
+            print(f'WEBHOOK TRACE ({response['status']}):',response)
+        else:
+            print('WEBHOOK TRACE (200):',response)
 
 
     return '', 200  # Empty response with 200 status for Pub/Sub ACK
