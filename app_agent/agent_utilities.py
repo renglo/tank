@@ -572,6 +572,28 @@ class AgentUtilities:
             message_object
         )
         
+        '''
+        response format
+        
+        {
+            "success":BOOL, 
+            "message": STRING, 
+            "document": {
+                'author_id': STRING,
+                'time': STRING,
+                'is_active': BOOL,
+                'context': DICT,
+                'messages': STRING,
+                'index': STRING,
+                'entity_index': STRING,
+                '_id': STRING 
+            },
+            "status" : STRING
+        }
+        
+        '''
+        
+        
         if 'document' in response and '_id' in response['document']:
             self.chat_id = response['document']['_id']
         

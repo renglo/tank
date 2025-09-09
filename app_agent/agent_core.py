@@ -76,7 +76,7 @@ class AgentCore:
         self.CHC = ChatController()
         self.SHC = SchdController()
         
-        # AgentUtilities will be initialized when needed with context parameters
+        # AgentUtilities will be initialized in the run function
         self.AGU = None
         
         
@@ -132,7 +132,7 @@ class AgentCore:
         5. Action matching
         """
         action = 'pre_process_message'
-        self._get_utilities().print_chat('Pre-processing message...', 'text', connection_id=self._get_context().connection_id)
+        self.AGU.print_chat('Pre-processing message...', 'text', connection_id=self._get_context().connection_id)
         
         try:        
             # Get current time and date
@@ -151,14 +151,14 @@ class AgentCore:
                 }
             
             # Get current workspace
-            workspace = self._get_utilities().get_active_workspace()
+            workspace = self.AGU.get_active_workspace()
             current_action = workspace.get('state', {}).get('action', '') if workspace else ''
             last_belief = workspace.get('state', {}).get('belief', {}) if workspace else {}
             belief_history = workspace.get('state', {}).get('history', []) if workspace else []
                     
             # Clean and prepare belief history if provided
-            cleaned_belief_history = self._get_utilities().sanitize(belief_history) if belief_history else []
-            pruned_belief_history = self._get_utilities().prune_history(cleaned_belief_history) if cleaned_belief_history else []
+            cleaned_belief_history = self.AGU.sanitize(belief_history) if belief_history else []
+            pruned_belief_history = self.AGU.prune_history(cleaned_belief_history) if cleaned_belief_history else []
             prompt_text = f"""
             You are a comprehensive message processing module for a BDI agent. Your task is to process a user message through multiple stages in a single pass.
 
@@ -283,35 +283,35 @@ class AgentCore:
             10. Use new information to fill missing slots in the current action
             """
             prompt = {
-                "model": self._get_utilities().AI_1_MODEL,
+                "model": self.AGU.AI_1_MODEL,
                 "messages": [{ "role": "user", "content": prompt_text}],
                 "temperature":0
             }
-            response = self._get_utilities().llm(prompt)
+            response = self.AGU.llm(prompt)
             
             if not response.content:
                 raise Exception('LLM response is empty')
                 
             
             #print(f'PROCESS MESSAGE PROMPT >> {prompt}')
-            result = self._get_utilities().clean_json_response(response.content)
-            sanitized_result = self._get_utilities().sanitize(result)
+            result = self.AGU.clean_json_response(response.content)
+            sanitized_result = self.AGU.sanitize(result)
             
             # Update workspace with the results
             if 'facts' in sanitized_result:
-                self._get_utilities().mutate_workspace({'belief': sanitized_result['facts']}, public_user=self._get_context().public_user, workspace_id=self._get_context().workspace_id)
+                self.AGU.mutate_workspace({'belief': sanitized_result['facts']}, public_user=self._get_context().public_user, workspace_id=self._get_context().workspace_id)
             
             if 'desire' in sanitized_result:
-                self._get_utilities().mutate_workspace({'desire': sanitized_result['desire']}, public_user=self._get_context().public_user, workspace_id=self._get_context().workspace_id)
+                self.AGU.mutate_workspace({'desire': sanitized_result['desire']}, public_user=self._get_context().public_user, workspace_id=self._get_context().workspace_id)
             
             if 'action_match' in sanitized_result and 'action' in sanitized_result['action_match']:
                 # Check if action.key is used instead of action.name  
-                self._get_utilities().mutate_workspace({'action': sanitized_result['action_match']['action']}, public_user=self._get_context().public_user, workspace_id=self._get_context().workspace_id)
+                self.AGU.mutate_workspace({'action': sanitized_result['action_match']['action']}, public_user=self._get_context().public_user, workspace_id=self._get_context().workspace_id)
             
             # Update belief history with new entities
             if 'belief_history_updates' in sanitized_result:
                 for update in sanitized_result['belief_history_updates']:
-                    self._get_utilities().mutate_workspace({'belief_history': {update['key']: update['val']}}, public_user=self._get_context().public_user, workspace_id=self._get_context().workspace_id)
+                    self.AGU.mutate_workspace({'belief_history': {update['key']: update['val']}}, public_user=self._get_context().public_user, workspace_id=self._get_context().workspace_id)
             
             #self.print_chat(sanitized_result, 'json')
              
@@ -338,12 +338,12 @@ class AgentCore:
     def interpret(self,no_tools=False):
         
         action = 'interpret'
-        self._get_utilities().print_chat('Interpreting message...', 'text', connection_id=self._get_context().connection_id)
+        self.AGU.print_chat('Interpreting message...', 'text', connection_id=self._get_context().connection_id)
         print('interpret')
         
         try:
             # We get the message history directly from the source of truth to avoid missing tool id calls. 
-            message_list = self._get_utilities().get_message_history()
+            message_list = self.AGU.get_message_history()
             
             print(f'Raw Message History: {message_list}')
             
@@ -352,7 +352,7 @@ class AgentCore:
             # The reason is that we don't want to overwhelm the LLM with the contents of the history of tool outputs. 
             
             # Clear content from all tool messages except the last one
-            message_list = self._get_utilities().clear_tool_message_content(message_list['output'])
+            message_list = self.AGU.clear_tool_message_content(message_list['output'])
             
             print(f'Cleared Message History: {message_list}')
             
@@ -361,7 +361,7 @@ class AgentCore:
             current_time = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
             
             # Workspace
-            workspace = self._get_utilities().get_active_workspace()
+            workspace = self.AGU.get_active_workspace()
             
             # Action  
             current_action = workspace.get('state', {}).get('action', '') if workspace else ''
@@ -380,7 +380,7 @@ class AgentCore:
 
             # Belief  
             current_beliefs = workspace.get('state', {}).get('beliefs', {}) if workspace else {}
-            belief_str = 'Current beliefs: ' + self._get_utilities().string_from_object(current_beliefs)
+            belief_str = 'Current beliefs: ' + self.AGU.string_from_object(current_beliefs)
             print(f'Current Belief:{belief_str}')
                 
             #belief_history = workspace.get('state', {}).get('history', []) if workspace else []             
@@ -506,7 +506,7 @@ class AgentCore:
                     
             # Prompt
             prompt = {
-                    "model": self._get_utilities().AI_1_MODEL,
+                    "model": self.AGU.AI_1_MODEL,
                     "messages": messages,
                     "tools": list_tools,
                     "temperature":0,
@@ -514,11 +514,11 @@ class AgentCore:
                 }
             
             
-            prompt = self._get_utilities().sanitize(prompt)
+            prompt = self.AGU.sanitize(prompt)
             
             print(f'RAW PROMPT >> {prompt}')
     
-            response = self._get_utilities().llm(prompt)
+            response = self.AGU.llm(prompt)
             
             print(f'RAW RESPONSE >> {response}')
           
@@ -532,7 +532,7 @@ class AgentCore:
                 }
                 
             
-            validation = self._get_utilities().validate_interpret_openai_llm_response(response)
+            validation = self.AGU.validate_interpret_openai_llm_response(response)
             if not validation['success']:
                 return {
                     'success': False,
@@ -544,7 +544,7 @@ class AgentCore:
             validated_result = validation['output']
            
             # Saving : A) The tool call, or B) The message to the user
-            self._get_utilities().save_chat(validated_result)  
+            self.AGU.save_chat(validated_result)  
                       
             return {
                 'success': True,
@@ -591,21 +591,21 @@ class AgentCore:
                 raise ValueError("❌ No tool name provided in tool selection")
                 
             print(f"Selected tool: {tool_name}")
-            self._get_utilities().print_chat(f'Calling tool {tool_name} with parameters {params} ', 'text', connection_id=self._get_context().connection_id)
+            self.AGU.print_chat(f'Calling tool {tool_name} with parameters {params} ', 'text', connection_id=self._get_context().connection_id)
             print(f"Parameters: {params}")
 
             # Check if handler exists
             if tool_name not in list_handlers:
                 error_msg = f"❌ No handler found for tool '{tool_name}'"
                 print(error_msg)
-                self._get_utilities().print_chat(error_msg, 'text', connection_id=self._get_context().connection_id)
+                self.AGU.print_chat(error_msg, 'text', connection_id=self._get_context().connection_id)
                 raise ValueError(error_msg)
             
             # Check if handler is an empty string
             if list_handlers[tool_name] == '':
                 error_msg = f"❌ Handler is empty"
                 print(error_msg)
-                self._get_utilities().print_chat(error_msg, 'text', connection_id=self._get_context().connection_id)
+                self.AGU.print_chat(error_msg, 'text', connection_id=self._get_context().connection_id)
                 raise ValueError(error_msg)
                 
             # Check if handler has the right format
@@ -614,7 +614,7 @@ class AgentCore:
             if len(parts) != 2:
                 error_msg = f"❌ {tool_name} is not a valid tool."
                 print(error_msg)
-                self._get_utilities().print_chat(error_msg, 'text', connection_id=self._get_context().connection_id)
+                self.AGU.print_chat(error_msg, 'text', connection_id=self._get_context().connection_id)
                 raise ValueError(error_msg)
             
 
@@ -657,9 +657,9 @@ class AgentCore:
 
             # Save the message after it's created
             if interface:
-                self._get_utilities().save_chat(tool_out,interface=interface)
+                self.AGU.save_chat(tool_out,interface=interface)
             else:
-                self._get_utilities().save_chat(tool_out)
+                self.AGU.save_chat(tool_out)
                 
             
             print(f'flag3')
@@ -680,7 +680,7 @@ class AgentCore:
             #input is a serialize json, you need to turn it into a python object before inserting it into the value dictionary
             tool_input_obj = json.loads(tool_input) if isinstance(tool_input, str) else tool_input
             value = {'input': tool_input_obj, 'output': clean_output}
-            self._get_utilities().mutate_workspace({'cache': {index:value}}, public_user=self._get_context().public_user, workspace_id=self._get_context().workspace_id)
+            self.AGU.mutate_workspace({'cache': {index:value}}, public_user=self._get_context().public_user, workspace_id=self._get_context().workspace_id)
             
             print(f'flag5')
             
@@ -692,7 +692,7 @@ class AgentCore:
         except Exception as e:
 
             error_msg = f"❌ Execute Intention failed. @act trying to run tool:'{tool_name}': {str(e)}"
-            self._get_utilities().print_chat(error_msg,'text', connection_id=self._get_context().connection_id) 
+            self.AGU.print_chat(error_msg,'text', connection_id=self._get_context().connection_id) 
             print(error_msg)
             self._update_context(execute_intention_error=error_msg)
             
@@ -807,6 +807,15 @@ class AgentCore:
         if 'workspace' in payload:
             context.workspace_id = payload['workspace']
             
+            
+        self.AGU = AgentUtilities(
+            context.portfolio,
+            context.org,
+            context.entity_type,
+            context.entity_id,
+            context.thread
+            )
+            
         # Get available actions and tools
         actions = self.DAC.get_a_b(context.portfolio, context.org, 'schd_actions')
         context.list_actions = actions['items']
@@ -820,7 +829,7 @@ class AgentCore:
         results = []
          
         # Get the initial chat message history and put it in the context
-        message_history = self._get_utilities().get_message_history()
+        message_history = self.AGU.get_message_history()
         if not message_history['success']:
             return {'success':False,'action':action,'output':message_history}
             
@@ -831,7 +840,7 @@ class AgentCore:
         try:
             
             # Step 0: Create thread/message document
-            response_0 = self._get_utilities().new_chat_message_document(payload['data'], public_user=context.public_user)
+            response_0 = self.AGU.new_chat_message_document(payload['data'], public_user=context.public_user)
             results.append(response_0)
             if not response_0['success']: 
                 return {'success':False,'action':action,'output':results}
@@ -861,7 +870,7 @@ class AgentCore:
                     # No tool needs execution. 
                     # Most likely the agent is asking for more information to fill tool parameters. 
                     # Or agent is answering questions directly from the belief system.
-                    self._get_utilities().print_chat(f'🤖','text', connection_id=context.connection_id)
+                    self.AGU.print_chat(f'🤖','text', connection_id=context.connection_id)
                     return {'success':True,'action':action,'input':payload,'output':results}
                                 
                 else:
@@ -899,8 +908,8 @@ class AgentCore:
 
             
         except Exception as e:
-            self._get_utilities().print_chat(e,'text', connection_id=context.connection_id)
-            self._get_utilities().print_chat(f'🤖❌','text', connection_id=context.connection_id)
+            self.AGU.print_chat(e,'text', connection_id=context.connection_id)
+            self.AGU.print_chat(f'🤖❌','text', connection_id=context.connection_id)
             return {'success':False,'action':action,'message':f'Run failed. Error:{str(e)}','output':results}
 
     
