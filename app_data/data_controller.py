@@ -1132,10 +1132,8 @@ class DataController:
             result['error'] = item['error']
             status = 400
             return result
-
-        
+    
         current_app.logger.debug('Updating Item:'+str(item))
-
         response = self.DAM.put_a_b_c(portfolio,org,ring,idx,item)
         
         #current_app.logger.debug('Update response:'+str(response))
