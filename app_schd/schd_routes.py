@@ -281,7 +281,10 @@ def webhook_call(portfolio,org,tool,handler):
     response = SHC.handler_call(portfolio,org,tool,handler,payload)
     
     if not response['success']:
-        print('WEBHOOK TRACE (400):', response)
+        if 'status' in response:
+            print(f'WEBHOOK TRACE ({response['status']}):',response)
+        else:
+            print('WEBHOOK TRACE (400):', response)
     else:
         if 'status' in response:
             print(f'WEBHOOK TRACE ({response['status']}):',response)

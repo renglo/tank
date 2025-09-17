@@ -523,6 +523,52 @@ class AgentUtilities:
         except Exception as e:
             print(f"Error running LLM call: {e}")
             return False
+        
+    
+    def new_chat_thread_document(self,public_user=''):
+        """
+        Check if thread exists and if not create new one
+        
+        """
+        action = 'new_chat_thread_document'
+        print(f'Running: {action}')
+        
+        try:
+        # List threads
+            threads = self.CHC.list_threads(self.portfolio,self.org,self.entity_type,self.entity_id)
+            print(f'List Threads: {threads}')
+            
+            if 'success' in threads:
+                if len(threads['items']) < 1:
+                    # No threads found
+                    print('Creating new thread')
+                    response_2 = self.CHC.create_thread(self.portfolio,self.org,self.entity_type, self.entity_id, public_user=public_user)
+                    
+                    if not response_2.get('success'):
+                        print(f'Failed to create thread: {response_2}')
+                        return {'success': False,'action': action,'input': message_payload,'output': response_2}
+                
+                    thread = response_2['document']
+                    
+                else:
+                    thread = threads['items'][0]   
+                return {
+                    'success': True,'action': action,'output': thread
+                }
+                
+            else: 
+                return {
+                    'success': False,'action': action,'output': thread
+                }
+                
+                
+        
+        except Exception as e:
+            
+            print(f"Error getting/creating thread: {e}")
+            return {'success': False,'action': action,'output': f"{e}"}
+                 
+
 
     def new_chat_message_document(self, message, public_user=None):
         """
@@ -538,71 +584,82 @@ class AgentUtilities:
         action = 'new_chat_message_document'
         print(f'Running: {action}')  
         
-        message_context = {}
-        message_context['portfolio'] = self.portfolio
-        message_context['org'] = self.org
-        message_context['public_user'] = public_user
-        message_context['entity_type'] = self.entity_type
-        message_context['entity_id'] = self.entity_id
-        message_context['thread'] = self.thread
+        try:
+        
+            message_context = {}
+            message_context['portfolio'] = self.portfolio
+            message_context['org'] = self.org
+            message_context['public_user'] = public_user
+            message_context['entity_type'] = self.entity_type
+            message_context['entity_id'] = self.entity_id
+            message_context['thread'] = self.thread
+            
+            new_message = {"role": "user", "content": message}
+            msg_wrap = {
+                "_out": new_message,
+                "_type": "text",
+                "_id": str(uuid.uuid4())  # This is the Message ID
+            }
+            
+            # Append new message to volatile context
+            current_history = self.message_history
+            current_history.append(new_message)
+            self.message_history = current_history
+            
+            # Append new message to permanent storage
+            message_object = {}
+            message_object['context'] = message_context
+            message_object['messages'] = [msg_wrap]
+                    
+            response = self.CHC.create_turn(
+                self.portfolio,
+                self.org,
+                self.entity_type,
+                self.entity_id,
+                self.thread,
+                message_object
+            )
+            
+            '''
+            response format
+            
+            {
+                "success":BOOL, 
+                "message": STRING, 
+                "document": {
+                    'author_id': STRING,
+                    'time': STRING,
+                    'is_active': BOOL,
+                    'context': DICT,
+                    'messages': STRING,
+                    'index': STRING,
+                    'entity_index': STRING,
+                    '_id': STRING 
+                },
+                "status" : STRING
+            }
+            
+            '''
+            
+            
+            if 'document' in response and '_id' in response['document']:
+                self.chat_id = response['document']['_id']
+            
+            print(f'Response: {response}')
+        
+            if 'success' not in response:
+                return {'success': False, 'action': action, 'input': message, 'output': response}
+            
+            return {'success': True, 'action': action, 'input': message, 'output': response['document']}
+        
+        
+        except Exception as e:
+            
+            print(f"Error getting/creating turn: {e}")
+            return {'success': False,'action': action,'input': message_payload,'output': f"{e}"}
           
-        new_message = {"role": "user", "content": message}
-        msg_wrap = {
-            "_out": new_message,
-            "_type": "text",
-            "_id": str(uuid.uuid4())  # This is the Message ID
-        }
-        
-        # Append new message to volatile context
-        current_history = self.message_history
-        current_history.append(new_message)
-        self.message_history = current_history
-        
-        # Append new message to permanent storage
-        message_object = {}
-        message_object['context'] = message_context
-        message_object['messages'] = [msg_wrap]
-                 
-        response = self.CHC.create_turn(
-            self.portfolio,
-            self.org,
-            self.entity_type,
-            self.entity_id,
-            self.thread,
-            message_object
-        )
-        
-        '''
-        response format
-        
-        {
-            "success":BOOL, 
-            "message": STRING, 
-            "document": {
-                'author_id': STRING,
-                'time': STRING,
-                'is_active': BOOL,
-                'context': DICT,
-                'messages': STRING,
-                'index': STRING,
-                'entity_index': STRING,
-                '_id': STRING 
-            },
-            "status" : STRING
-        }
-        
-        '''
         
         
-        if 'document' in response and '_id' in response['document']:
-            self.chat_id = response['document']['_id']
-        
-        print(f'Response: {response}')
-    
-        if 'success' not in response:
-            return {'success': False, 'action': action, 'input': message, 'output': response}
-        
-        return {'success': True, 'action': action, 'input': message, 'output': response}
 
     def get_active_workspace(self, workspace_id=None):
         """
