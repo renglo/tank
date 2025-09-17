@@ -863,7 +863,8 @@ class AgentCore:
                 results.append(response_1)
                 if not response_1['success']:
                     # Something went wrong during message interpretation
-                    return {'success':False,'action':action,'output':results}         
+                    return {'success':False,'action':action,'output':results}  
+                       
                 
                 # Check whether we need to run a tool
                 if 'tool_calls' not in response_1['output'] or not response_1['output']['tool_calls']:

@@ -1,10 +1,20 @@
-# Initiating the local environment
+# TANK
+This readme helps you install a local dev environment in your computer. 
+
+## Initiating the local environment
 
 ### A) CLONING THE REPOSITORIES
 
 #### Step 1 
 Create a container folder with the name of the project. You are going to clone a couple of repositories inside of this folder
 
+**MacOS/Linux:**
+```
+mkdir <project_name>
+cd <project_name>
+```
+
+**Windows:**
 ```
 mkdir <project_name>
 cd <project_name>
@@ -21,6 +31,13 @@ git clone https://github.com/renglo/tower.git
 #### Step 3 
 Create a new folder called Tools. You are going to clone all the tools inside of that folder
 
+**MacOS/Linux:**
+```
+mkdir tools
+cd tools
+```
+
+**Windows:**
 ```
 mkdir tools
 cd tools
@@ -51,8 +68,15 @@ git clone https://github.com/renglo/<tool_name>.git
 Installing Tank dependencies
 
 Go to the tank folder
+
+**MacOS/Linux:**
 ```
 cd ../tank
+```
+
+**Windows:**
+```
+cd ..\tank
 ```
 
 First, check if you have python3.12 installed
@@ -70,8 +94,15 @@ Type "help", "copyright", "credits" or "license" for more information.
 
 If python3.12 is not installed, install it using Homebrew 
 
+**MacOS/Linux:**
 ```
 brew install python@3.12
+```
+
+**Windows:**
+```
+# Download Python 3.12 from https://www.python.org/downloads/
+# Or use chocolatey: choco install python --version=3.12
 ```
 
 Create the Virtual Environment in the root folder of the project
@@ -82,8 +113,14 @@ python3.12 -m venv venv
 
 Activate the Virtual Environment
 
+**MacOS/Linux:**
 ```
 source venv/bin/activate
+```
+
+**Windows:**
+```
+venv\Scripts\activate
 ```
 
 Install all packages indicated in requirements.txt
@@ -92,14 +129,29 @@ pip install -r requirements.txt
 ```
 
 Set the new configuration file
+
+**MacOS/Linux:**
 ```
 cp env_config.py.TEMPLATE env_config.py
 ```
 
+**Windows:**
+```
+copy env_config.py.TEMPLATE env_config.py
+```
+
 Set the run script
+
+**MacOS/Linux:**
 ```
 cp run.sh.TEMPLATE run.sh
 vim run.sh
+```
+
+**Windows:**
+```
+copy run.sh.TEMPLATE run.sh
+notepad run.sh
 ```
 Specify the project namespace and the region in run.sh
 ```
@@ -116,9 +168,16 @@ Many of those settings will be available to you until you set the cloud (Step 10
 
 Try running Flask
 
+**MacOS/Linux:**
 ```
-flask run
+source run.sh
 ```
+
+**Windows:**
+```
+call run.sh
+```
+
 
 You are going to see a message showing the server has started like the following
 
@@ -142,8 +201,14 @@ A symbolic link connects them together. The symbolic link is called _tank-front
 
 Run this command to see where the symbolic link is pointing to
 
+**MacOS/Linux:**
 ```
 ls -l
+```
+
+**Windows:**
+```
+dir
 ```
 
 You should see something like this:
@@ -155,14 +220,26 @@ _tower -> ../tower/dist
 The symbolic link already exists in your clone, if you install Tank and Tower in the same folder you don’t need to do anything. However, if you need to modify the symbolic link to point to another folder that contains the Tower clone of your application, 
 first, remove the existing symbolic link. This command removes the link but not the target folder. 
 
+**MacOS/Linux:**
 ```
 rm _tower
 ```
 
+**Windows:**
+```
+rmdir _tower
+```
+
 Then, create the new symbolic link
 
+**MacOS/Linux:**
 ```
 ln -s ../<new_dist_location> _tower
+```
+
+**Windows:**
+```
+mklink /D _tower ..\<new_dist_location>
 ```
 
 While the symbolic link will be created, it will not work until you clone Tower in that location for this project.
@@ -172,8 +249,15 @@ While the symbolic link will be created, it will not work until you clone Tower 
 Installing Tower dependencies
 
 Go to the tower folder
+
+**MacOS/Linux:**
 ```
 cd ../tower
+```
+
+**Windows:**
+```
+cd ..\tower
 ```
 
 
@@ -193,10 +277,19 @@ Set the Configuration files
 
 You are going to create two new files in the tower root folder called .env.development and .env.production based on the .env.development.TEMPLATE and .env.production.TEMPLATE files as a starting point. 
 
+
+**MacOS/Linux:**
 ```
 cp .env.development.TEMPLATE .env.development
 cp .env.production.TEMPLATE .env.production
 cp src/tools.json.TEMPLATE src/tools.json
+```
+
+**Windows:**
+```
+copy .env.development.TEMPLATE .env.development
+copy .env.production.TEMPLATE .env.production
+copy src\tools.json.TEMPLATE src\tools.json
 ```
 
 
@@ -215,9 +308,17 @@ npm run dev
 
 If you are getting errors, clear the libraries and start over
 
+**MacOS/Linux:**
 ```
 rm -rf node_modules
 rm package-lock.json
+npm install
+```
+
+**Windows:**
+```
+rmdir /s /q node_modules
+del package-lock.json
 npm install
 ```
 
@@ -230,9 +331,16 @@ nvm install 18
 
 Set the Tools manifest. Copy the contents of the tools template
 
+**MacOS/Linux:**
 ```
 cd tower/src
 cp tools.json.TEMPLATE tools.json
+```
+
+**Windows:**
+```
+cd tower\src
+copy tools.json.TEMPLATE tools.json
 ```
 
 
@@ -262,8 +370,14 @@ A large one (1000x1000 px, Max 500kb, name: large_logo.jpg) for the log-in page
 
 Place both images in tower/public 
 
+**MacOS/Linux:**
 ```
 cd tools/public
+```
+
+**Windows:**
+```
+cd tools\public
 ```
 
 The image names are listed in the .gitignore and in the .env.* files. For that reason you must use those names. 
@@ -294,12 +408,24 @@ Go to the next step to resolve it.
 Because the tools live outside the Tower repository, they don't share the libraries. 
 You need to install the libraries used by the tools in the /tools folder. 
 
+**MacOS/Linux:**
 ```
 cd ../tools
 npm install recharts
 npm install lucide-react
 npm install react-resizable-panels
 npm install date-fns
+npm install react-syntax-highlighter
+```
+
+**Windows:**
+```
+cd ..\tools
+npm install recharts
+npm install lucide-react
+npm install react-resizable-panels
+npm install date-fns
+npm install react-syntax-highlighter
 ```
 
 This will automatically create the `node_modules` folder and the files `package-lock.json`, `package.json` and `tscongif.json`
@@ -320,8 +446,15 @@ Create a file called `tsconfig.json` file and place it inside of /tools. The con
 
 Now, try running the build command again
 
+**MacOS/Linux:**
 ```
 cd ../tower
+yarn build
+```
+
+**Windows:**
+```
+cd ..\tower
 yarn build
 ```
 
@@ -353,11 +486,18 @@ You can repeat this process in any computer that will be developing a TankTower 
 If you didn't go through the AWS Credential setup step in Step 11, run the following instructions
 
 
- Install awscli 
+Install awscli 
 
- ```
- brew install awscli
- ```
+**MacOS/Linux:**
+```
+brew install awscli
+```
+
+**Windows:**
+```
+# Download from https://aws.amazon.com/cli/
+# Or use chocolatey: choco install awscli
+```
 
  Verify installation
 
@@ -405,6 +545,13 @@ You need to install the SCHD blueprints.  Run:
 cd tools/schd/installer
 python upload_blueprints.py <env_name> --aws-profile <profile_name> --aws-region <region>
 
+**MacOS/Linux:**
+```
+
+**Windows:**
+```
+cd tools\schd\installer
+python upload_blueprints.py <env_name> --aws-profile <profile_name> --aws-region <region>
 ```
 
 
