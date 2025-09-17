@@ -112,7 +112,9 @@ class SchdLoader:
         
         try:
             # Add parent directory to sys.path in a cross-platform way
-            parent_dir = os.path.abspath("..")
+            # Get the directory containing this file, then go up one level
+            current_file_dir = os.path.dirname(os.path.abspath(__file__))
+            parent_dir = os.path.dirname(current_file_dir)
             if parent_dir not in sys.path:
                 sys.path.append(parent_dir)
             
@@ -150,13 +152,23 @@ class SchdLoader:
             class_name = self.convert_module_name_to_class(module_name)
             print(f'Attempting to load class:{class_name}')
             
-            # Use os.path.normpath to handle different path separators
-            normalized_module_name = os.path.normpath(module_name)
-            # Split using os.path.sep to be cross-platform
-            module_parts = normalized_module_name.split(os.sep)
+            # Handle both file paths and dot-notation module names
+            if os.sep in module_name or '/' in module_name:
+                # It's a file path - normalize and split using os.sep
+                normalized_module_name = os.path.normpath(module_name)
+                module_parts = normalized_module_name.split(os.sep)
+            else:
+                # It's already in dot notation - split by dots
+                module_parts = module_name.split('.')
+            
             payload = kwargs.get('payload')  # Extract payload from kwargs
             
-            instance = self.load_code_class(module_parts[0],module_parts[1], class_name, *args, **kwargs)
+            # Ensure we have at least 2 parts for module_path and module_name
+            if len(module_parts) < 2:
+                error = f"Module name '{module_name}' must have at least 2 parts (module_path.module_name)"
+                return {'success':False,'action':action,'error':error,'output':error,'status':500}
+            
+            instance = self.load_code_class(module_parts[0], module_parts[1], class_name, *args, **kwargs)
             runtime_loaded_class = True
     
             if not instance:

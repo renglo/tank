@@ -508,7 +508,7 @@ brew install awscli
  Run configuration script
 
  ```
- aws configure
+ aws configure --profile <profile_name>
  ```
 
  You'll get a prompt like the following. Enter the access key, secret key and output. Leave output as None.
