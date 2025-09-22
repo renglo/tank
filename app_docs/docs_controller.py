@@ -19,7 +19,7 @@ class DocsController:
         
         
     
-    def a_b_post(self,portfolio,org,ring,file,type,override):
+    def a_b_post(self,portfolio,org,ring,file,type,name):
         
         # file needs to come in binary format already
         current_app.logger.info("Uploading a DOC")
@@ -29,7 +29,7 @@ class DocsController:
                 current_app.logger.info("File type is valid.")
                 
                 #response = upload_doc_to_s3(portfolio,org,ring,raw_content,up_file_type) 
-                response = self.DCM.a_b_post(portfolio,org,ring,file,type,override)  
+                response = self.DCM.a_b_post(portfolio,org,ring,file,type,name)  
                 
                 if response['success']:    
                     return response 

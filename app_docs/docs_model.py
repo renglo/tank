@@ -18,11 +18,9 @@ class DocsModel:
         }
  
     
-    def a_b_post(self,portfolio, org, ring, raw_doc, type, override):
+    def a_b_post(self,portfolio, org, ring, raw_doc, type, name):
         
-        if override:
-            name = override
-        else:
+        if not name:
             name = str(uuid.uuid4())
         
         s3_client = boto3.client('s3')
