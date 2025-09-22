@@ -94,7 +94,7 @@ def run(env_name: str, aws_profile: str, region: str = "us-east-1") -> Dict[str,
         {"name": f"{env_name}_blueprints", "partition_key": "irn", "sort_key": "version"},
         {"name": f"{env_name}_entities", "partition_key": "index", "sort_key": "_id"},
         {"name": f"{env_name}_rel", "partition_key": "index", "sort_key": "rel"},
-        {"name": f"{env_name}_chat", "partition_key": "index", "sort_key": "time"},
+        {"name": f"{env_name}_chat", "partition_key": "index", "sort_key": "entity_index"},
     ]
 
     # Create tables and collect ARNs
@@ -102,14 +102,8 @@ def run(env_name: str, aws_profile: str, region: str = "us-east-1") -> Dict[str,
     
     # Create standard tables
     for table in tables:
-        if table["name"] == f"{env_name}_chat":
-            # Create chat table with LSI for entity_index
-            chat_table_lsis = [
-                {"IndexName": "entity_index", "SortKey": "entity_index", "ProjectionType": "ALL"},
-            ]
-            create_table(dynamodb, table["name"], table["partition_key"], table["sort_key"], local_secondary_indexes=chat_table_lsis)
-        else:
-            create_table(dynamodb, table["name"], table["partition_key"], table["sort_key"])
+        
+        create_table(dynamodb, table["name"], table["partition_key"], table["sort_key"])
         
         response = dynamodb.describe_table(TableName=table["name"])
         table_arns[table["name"]] = response["Table"]["TableArn"]
