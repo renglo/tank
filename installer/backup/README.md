@@ -83,13 +83,7 @@ python backup_table.py \
   --region us-east-1
 ```
 
-```
-python backup_table.py \
-  --table noma_chat \
-  --out noma_chat_backup.json \
-  --profile maker \
-  --region us-east-1
-```
+
 
 Options:
 	•	--limit N — optional, export only N items (for smoke tests).
@@ -143,14 +137,7 @@ python restore_table.py \
   --dry-run
 ```
 
-```
-python restore_table.py \
-  --table NewTable \
-  --in noma_chat_backup.jsonl \
-  --profile maker \
-  --region us-east-1 \
-  --dry-run
-```
+
 
 You'll see progress logs but no writes occur.
 
@@ -167,14 +154,6 @@ python restore_table.py \
   --batch-size 25
 ```
 
-```
-python restore_table.py \
-  --table noma_chat2 \
-  --in noma_chat_backup.jsonl \
-  --profile maker \
-  --region us-east-1 \
-  --batch-size 25
-```
 
 Notes:
 	•	--batch-size must be ≤ 25 (DynamoDB limit). Default is 25.
