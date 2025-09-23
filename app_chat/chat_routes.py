@@ -7,6 +7,7 @@ from app_chat.chat_controller import ChatController
 from app_agent.agent_controller import AgentController
 from app_auth.auth_controller import AuthController
 from app_data.data_controller import DataController
+from app_schd.schd_controller import SchdController
 from functools import wraps
 import time
 import json
@@ -28,6 +29,7 @@ CHC = ChatController()
 AGC = AgentController()
 AUC = AuthController()
 DAC = DataController()
+SHC = SchdController()
 
 
 
@@ -94,7 +96,12 @@ def real_time_message():
             current_app.logger.error(f"Missing required fields: {missing_fields}")
             return jsonify({'error': f'Missing required fields: {missing_fields}'}), 400
         
-        response = AGC.triage(payload)
+        
+        if 'core' in payload:
+            response, status = SHC.direct_run(payload['core'],payload)
+        else:
+            response = AGC.triage(payload)
+        
         
         # Handle the case where response is a tuple (response, status)
         if isinstance(response, tuple):
@@ -260,11 +267,16 @@ def chat_tb():
       'entity_type':<entity_type>,
       'entity_id':<entity_id>,
       'thread':<thread_id>,
+      'core':<custom agent>,
       'data': <raw_message>
     }
     '''
     payload = request.get_json()
-    response = AGC.triage(payload)
+    
+    if 'core' in payload:
+        response, status = SHC.direct_run(payload['core'],payload)
+    else:
+        response = AGC.triage(payload)
     
     current_app.logger.debug('TRACE >>')
     current_app.logger.debug(response)
