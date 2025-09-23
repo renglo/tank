@@ -327,6 +327,7 @@ Name: message_template
   "thread": "$inputRoot.thread",
   "portfolio": "$inputRoot.portfolio",
   "org": "$inputRoot.org",
+  "core": "$context.core",
   "connectionId": "$context.connectionId"
 }
 ```
