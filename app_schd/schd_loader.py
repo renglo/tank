@@ -34,6 +34,7 @@ class SchdLoader:
         
         # Use os.path.join for cross-platform path construction
         path = os.path.join('_tools', module_path, 'handlers')
+        print(f'Path:{path}')
         
         # Resolve the absolute path first
         base_path = os.path.abspath(path)

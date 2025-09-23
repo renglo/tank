@@ -637,13 +637,13 @@ class AgentCore:
                 return {'success':False,'action':action,'input':params,'output':response}
 
             # The response of every handler always comes nested 
-            clean_output = response['output']['output']['output'][-1]['output']
+            clean_output = response['output']
             clean_output_str = json.dumps(clean_output, cls=DecimalEncoder)
             
             interface = None
             # The handler determines the interface
-            if 'interface' in response['output']['output']['output'][-1]:
-                interface = response['output']['output']['output'][-1]['interface']
+            if 'interface' in response['output']:
+                interface = response['output']['interface']
 
                
             
