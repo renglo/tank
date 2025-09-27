@@ -21,5 +21,5 @@ DEBUG = True
 
 LOGFILE_PATH = u''
 
-
-
+CACHE_TYPE = 'simple'
+CACHE_DEFAULT_TIMEOUT = 300

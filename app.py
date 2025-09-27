@@ -1,5 +1,6 @@
 # Import flask and template operators
 from flask import request,Flask,current_app, session, redirect
+from flask_caching import Cache
 from default_config import *
 import logging
 import time
@@ -35,10 +36,14 @@ import requests
 
 # Define the WSGI application object
 app = Flask(__name__,static_folder='_tower', static_url_path='/')
-
-
-
 app.config.from_object('default_config')
+
+
+cache = Cache(app)
+
+app.cache = cache
+
+
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
