@@ -1,0 +1,83 @@
+name: "Sign the CLA"
+description: "Sign the Contributor License Agreement (ICLA or CCLA) for Renglo"
+title: "CLA Signature: [Your Name or Company]"
+labels: ["cla-signature"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Contributor License Agreement – Renglo
+        Thank you for contributing!  
+        Please fill out **either the Individual CLA (ICLA)** or the **Corporate CLA (CCLA)** below.
+
+        By submitting this form, you confirm that you have read and agree to the terms in:
+        - [ICLA](../../ICLA.md) (for individuals), or
+        - [CCLA](../../CCLA.md) (for corporations).
+
+  - type: dropdown
+    id: cla-type
+    attributes:
+      label: "Agreement Type"
+      description: "Are you signing as an individual or as a corporation?"
+      options:
+        - Individual (ICLA)
+        - Corporation (CCLA)
+    validations:
+      required: true
+
+  - type: input
+    id: full-name
+    attributes:
+      label: "Full Name / Authorized Representative"
+      description: "For corporations, use the representative’s full name."
+      placeholder: "Jane Doe"
+    validations:
+      required: true
+
+  - type: input
+    id: github-username
+    attributes:
+      label: "GitHub Username"
+      placeholder: "@janedoe"
+    validations:
+      required: true
+
+  - type: input
+    id: email
+    attributes:
+      label: "Email Address"
+      placeholder: "you@example.com"
+    validations:
+      required: true
+
+  - type: textarea
+    id: corporation-info
+    attributes:
+      label: "Corporation Info (for CCLA only)"
+      description: "If signing as a corporation, provide company name, address, and list of authorized contributors."
+      placeholder: |
+        Corporation Name: Renglo Inc.
+        Address: 123 Example Street, City, Country
+        Authorized Contributors:
+        - John Smith (@jsmith)
+        - Alice Brown (@abrown)
+    validations:
+      required: false
+
+  - type: input
+    id: date
+    attributes:
+      label: "Date"
+      placeholder: "YYYY-MM-DD"
+    validations:
+      required: true
+
+  - type: input
+    id: signature
+    attributes:
+      label: "Signature (type your full name)"
+      placeholder: "Jane Doe"
+    validations:
+      required: true
