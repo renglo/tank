@@ -63,7 +63,9 @@ if app.config['IS_LAMBDA']:
     
     # Build origins list safely - PRODUCTION ONLY
     # Only requests from trusted domains
-    origins = [app.config['TANK_FE_BASE_URL']]
+    # Normalize URL by removing trailing slash for CORS compatibility
+    tank_fe_url = app.config['TANK_FE_BASE_URL'].rstrip('/')
+    origins = [tank_fe_url]
     
     # Add APP_FE_BASE_URL if it exists in config
     if 'APP_FE_BASE_URL' in app.config and app.config['APP_FE_BASE_URL']:
@@ -73,11 +75,12 @@ if app.config['IS_LAMBDA']:
         app.logger.info('APP_FE_BASE_URL not found in config')
     
     # Add development origins only if explicitly enabled
-    if app.config.get(app.config['ALLOW_DEV_ORIGINS'], False):
+    if app.config.get('ALLOW_DEV_ORIGINS', False):
         app.logger.warning('DEVELOPMENT ORIGINS ENABLED - NOT RECOMMENDED FOR PRODUCTION')
         origins.extend(["http://127.0.0.1:5173", "http://127.0.0.1:3000", "http://localhost:5173", "http://localhost:3000"])
     
     app.logger.info('RUNNING ON LAMBDA ENVIRONMENT') 
+    app.logger.info(f'CORS Origins configured: {origins}')
     #CORS(app, resources={r"*": {"origins": origins}})
     CORS(
     app,
