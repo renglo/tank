@@ -1076,7 +1076,7 @@ class AuthController:
         if 'team_id' in kwargs:
             index = 'irn:rel:team:user:' + kwargs['team_id'] + ':*'
             response_1 = self.AUM.list_rel(index)
-
+            
             #3. Call the entity document of each user to retrieve the email 
             # and name from team members. If there are more than 10 users, 
             # just output the first ten.
@@ -1085,6 +1085,9 @@ class AuthController:
 
                 type = 'user' 
                 response_2 = self.get_entity(type,user_id=item['rel'])
+                
+                if not response_2['success']:
+                    continue
 
                 team_user_doc = response_2['document']
                 current_app.logger.debug('Team User Document:'+str(team_user_doc))
