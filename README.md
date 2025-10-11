@@ -158,8 +158,8 @@ Specify the project namespace and the region in run.sh
 For windows the run file must be a .bat
 ```
 @echo off
-set "AWS_PROFILE=acd-arbitium-tt-dev"
-set "AWS_DEFAULT_REGION=us-east-2"
+set "AWS_PROFILE=<PROJECT>"
+set "AWS_DEFAULT_REGION=<REGION>"
 python -m flask run
 ```
 
