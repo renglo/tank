@@ -481,8 +481,6 @@ class AgentUtilities:
         # 3. Update document in DB
         try:
             self.update_workspace_document(
-                self.portfolio,
-                self.org,
                 workspace,
                 workspace['_id']
             )
