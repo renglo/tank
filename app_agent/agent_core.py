@@ -345,7 +345,7 @@ class AgentCore:
             # We get the message history directly from the source of truth to avoid missing tool id calls. 
             message_list = self.AGU.get_message_history()
             
-            print(f'Raw Message History: {message_list}')
+            #print(f'Raw Message History: {message_list}')
             
             # Go through the message_list and replace the value of the 'content' attribute with an empty object when the role is 'tool'
             # Unless the last message it a tool response which the interpret function needs to process. 
@@ -354,7 +354,7 @@ class AgentCore:
             # Clear content from all tool messages except the last one
             message_list = self.AGU.clear_tool_message_content(message_list['output'])
             
-            print(f'Cleared Message History: {message_list}')
+            #print(f'Cleared Message History: {message_list}')
             
             
             # Get current time and date
@@ -516,11 +516,11 @@ class AgentCore:
             
             prompt = self.AGU.sanitize(prompt)
             
-            print(f'RAW PROMPT >> {prompt}')
+            #print(f'RAW PROMPT >> {prompt}')
     
             response = self.AGU.llm(prompt)
             
-            print(f'RAW RESPONSE >> {response}')
+            #print(f'RAW RESPONSE >> {response}')
           
             
             if not response:
@@ -641,9 +641,12 @@ class AgentCore:
             clean_output_str = json.dumps(clean_output, cls=DecimalEncoder)
             
             interface = None
+            
             # The handler determines the interface
-            if 'interface' in response['output']:
+            if isinstance(response['output'], dict) and 'interface' in response['output']:
                 interface = response['output']['interface']
+            elif isinstance(response['output'], list) and len(response['output']) > 0 and 'interface' in response['output'][0]:
+                interface = response['output'][0]['interface']
 
                
             
