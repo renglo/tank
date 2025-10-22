@@ -529,8 +529,8 @@ You need to install 3 configuration files in your local environments for your lo
 Ask your project admin for the config files for your project. 
 
 `tank/env_config.py`
-`tower/.env.development.*`
-`tower/.env.production.*`
+`tower/.env.development`
+`tower/.env.production`
 
 
 
