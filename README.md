@@ -153,14 +153,20 @@ vim run.sh
 copy run.sh.TEMPLATE run.sh
 notepad run.sh
 ```
+
 Specify the project namespace and the region in run.sh
+For windows the run file must be a .bat
 ```
-#!/bin/bash
-export AWS_PROFILE=<PROJECT>
-export AWS_DEFAULT_REGION=<REGION>
-flask run
+@echo off
+set "AWS_PROFILE=<PROJECT>"
+set "AWS_DEFAULT_REGION=<REGION>"
+python -m flask run
 ```
 
+Save as run.bat and run with
+```
+ .\run.bat
+```
 
 Open the config files and enter the tokens, secrets and IDs that belong to the environment you are deploying to. 
 Many of those settings will be available to you until you set the cloud (Step 10). 
@@ -552,6 +558,15 @@ python upload_blueprints.py <env_name> --aws-profile <profile_name> --aws-region
 ```
 cd tools\schd\installer
 python upload_blueprints.py <env_name> --aws-profile <profile_name> --aws-region <region>
+```
+
+*Note*
+On Windows, an additional fix is required: delete the existing symbolic link and recreate it as a Windows shortcut
+
+```
+cd tank
+Remove-Item _tools -Force
+New-Item -ItemType SymbolicLink -Path "_tools" -Target "..\tools"
 ```
 
 
