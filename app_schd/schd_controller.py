@@ -212,7 +212,7 @@ class SchdController:
         # And before every run, we could fetch the blueprint. It if doesn't exist we abort the call. 
         # It makes sense that there is a blueprint for every RPC as it shows the inputs of the call. 
         # We could store every call to the RPC as a document. The ring itself is the name of the blueprint. 
-        tool, handler_name = payload['handler'].split('/')
+        tool, handler_name = handler.split('/')
         if tool != '_action':
             blueprint = self.BPC.get_blueprint('irma',handler_name,'last')
         
