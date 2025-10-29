@@ -313,6 +313,7 @@ If you are getting errors, clear the libraries and start over
 rm -rf node_modules
 rm package-lock.json
 npm install
+npm run dev
 ```
 
 **Windows:**
@@ -320,6 +321,7 @@ npm install
 rmdir /s /q node_modules
 del package-lock.json
 npm install
+npm run dev
 ```
 
 
@@ -561,6 +563,59 @@ python upload_blueprints.py <env_name> --aws-profile <profile_name> --aws-region
 
 
 
+
+## TROUBLESHOOTING
+
+
+Chrome shows blank screen with “DEFINES is not defined”
+Symptoms: In Chrome only, the app is blank. Console shows: env.mjs:12 Uncaught ReferenceError: __DEFINES__ is not defined.
+Cause: Chrome was serving a stale Vite client/env module or HMR was pointing at the wrong host, so Vite’s define replacements didn’t apply.
+
+Fix
+1) Stop the dev server.
+2) Clear Vite cache and reinstall dependencies:
+
+```
+rm -rf node_modules/.vite
+rm -rf node_modules package-lock.json
+npm install
+```
+
+3) Ensure Vite dev server/HMR host match what you open in the browser (127.0.0.1:5173 in this case). Update vite.config.ts:
+
+```
+...
+server: {
+  proxy: {
+    '/api': {
+      target: apiUrl,
+      changeOrigin: true,
+      rewrite: (path) => path.replace(/^\/api/, '/'),
+    },
+  },
+  host: '127.0.0.1',
+  port: 5173,
+  hmr: {
+    protocol: 'ws',
+    host: '127.0.0.1',
+  },
+  fs: {
+    allow: ['../tools','..','../tools/*'],
+    strict: false,
+  },
+},
+...
+```
+
+4) Restart the dev server:
+```
+npm run dev
+```
+
+5) In Chrome, hard-reload with cache disabled:
+Open DevTools → Network → check “Disable cache” → Cmd+Shift+R.
+If still stuck, DevTools → Application → Clear storage → “Clear site data”, and Unregister any Service Workers.
+This resets stale Chrome caches and ensures Vite’s client connects to the correct host, restoring the define replacements and fixing the blank screen.
 
 
 
