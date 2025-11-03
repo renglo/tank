@@ -1,4 +1,4 @@
-# TANK
+# TANK [THIS REPOSITORY IS DEPRECATED]
 This readme helps you install a local dev environment in your computer. 
 
 ## Initiating the local environment
