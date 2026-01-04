@@ -7,7 +7,7 @@ from typing import Dict, Optional
 '''
 USAGE
 
-python create_single_dynamodb_table.py --table-name noma_chat3 --partition-key index --sort-key entities_id --aws-profile maker --region us-east-1
+python create_single_dynamodb_table.py --table-name <ns>_chat --partition-key index --sort-key entities_id --aws-profile maker --region us-east-1
 '''
 
 
